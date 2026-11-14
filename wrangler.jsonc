@@ -14,18 +14,18 @@
       "binding": "DB",
       "database_name": "letitfly",
       // Replace with the ID shown in Cloudflare → Storage & Databases → D1 → letitfly.
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "70cedca9-46de-4fa7-adf8-c2a384bc1956",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
     "APP_NAME": "LetItFly",
     // Comma-separated emails that get the Director tab.
-    "OWNER_EMAILS": "",
+    "OWNER_EMAILS": "stephanie.hr.cho@gmail.com",
     // Sender for sign-in codes once Resend is set up, e.g. "LetItFly <login@letitfly.com>".
     "FROM_EMAIL": "",
     // "1" shows sign-in codes on screen when no email service is configured. Testing only.
-    "DEV_SHOW_CODES": "0"
+    "DEV_SHOW_CODES": "1"
   },
   "observability": { "enabled": true }
 }
