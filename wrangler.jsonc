@@ -1,0 +1,31 @@
+{
+  // Cloudflare Worker for LetItFly: serves /public and the /api routes.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "letitfly",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "letitfly",
+      // Replace with the ID shown in Cloudflare → Storage & Databases → D1 → letitfly.
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "APP_NAME": "LetItFly",
+    // Comma-separated emails that get the Director tab.
+    "OWNER_EMAILS": "",
+    // Sender for sign-in codes once Resend is set up, e.g. "LetItFly <login@letitfly.com>".
+    "FROM_EMAIL": "",
+    // "1" shows sign-in codes on screen when no email service is configured. Testing only.
+    "DEV_SHOW_CODES": "0"
+  },
+  "observability": { "enabled": true }
+}

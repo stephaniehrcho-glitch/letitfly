@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>LetItFly</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: scoreboard header band, tabbed views; tracker = standings table + horizontally scrolling bracket per division */
+:root{
+  --bg:#eef2ee; --panel:#ffffff; --panel2:#f6f8f5; --ink:#13201a; --muted:#5b6b62; --line:#d5ddd6;
+  --accent:#1c6b45; --accent-ink:#ffffff; --accent-soft:#dcefe3; --mark:#c98a00; --mark-soft:#fbf0d2;
+  --bad:#b3261e; --bad-soft:#fbe3e1; --band:#13241b; --band-ink:#eaf3ec;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1411; --panel:#141e19; --panel2:#18241e; --ink:#e4ece6; --muted:#93a59a; --line:#26352d;
+  --accent:#4cc38a; --accent-ink:#06170e; --accent-soft:#173326; --mark:#f0bf4c; --mark-soft:#33290f;
+  --bad:#ff8a80; --bad-soft:#3a1714; --band:#0a110d; --band-ink:#e4ece6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1411; --panel:#141e19; --panel2:#18241e; --ink:#e4ece6; --muted:#93a59a; --line:#26352d;
+  --accent:#4cc38a; --accent-ink:#06170e; --accent-soft:#173326; --mark:#f0bf4c; --mark-soft:#33290f;
+  --bad:#ff8a80; --bad-soft:#3a1714; --band:#0a110d; --band-ink:#e4ece6; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--band)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.band{background:var(--band);color:var(--band-ink);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+header .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding-block:12px}
+.brand{display:flex;flex-direction:column;min-width:0;flex:1 1 260px}
+.brand small{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.7}
+.brand h1{font-family:var(--f-display);font-weight:800;font-size:26px;letter-spacing:.02em;text-transform:uppercase;margin:0;line-height:1.05;text-wrap:balance}
+nav.tabs{display:flex;gap:4px;background:rgba(255,255,255,.07);padding:4px;border-radius:8px}
+nav.tabs a{color:var(--band-ink);text-decoration:none;padding:7px 14px;border-radius:6px;font-weight:600;font-size:13px;opacity:.75}
+nav.tabs a[aria-current="page"]{background:var(--mark);color:#1a1400;opacity:1}
+nav.tabs a:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+main{padding-block:20px 60px;display:flex;flex-direction:column;gap:22px}
+h2{font-family:var(--f-display);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.03em;margin:0;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:700;font-size:18px;text-transform:uppercase;letter-spacing:.03em;margin:0}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sechead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;justify-content:space-between}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.muted{color:var(--muted)} .small{font-size:12px}
+.note{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px}
+.note.warn{background:var(--mark-soft);border-color:transparent}
+.note.bad{background:var(--bad-soft);border-color:transparent;color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);white-space:nowrap}
+.chip.on{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.chip.mark{background:var(--mark-soft);border-color:transparent;color:var(--ink)}
+.chip.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.mono,.yd{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,.btn{font:inherit;font-weight:600;font-size:13px;border-radius:7px;padding:7px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button.ghost{background:transparent}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0}
+input.yds{font-family:var(--f-mono);width:7.5em;font-size:16px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--panel2)}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+td.long{font-weight:700;color:var(--accent)}
+.nmlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.nmlink:hover{text-decoration-color:var(--accent)}
+td.pencell,th.pencell{width:40px;padding:4px 8px 4px 0;text-align:right}
+.penbtn{background:none;border:0;padding:4px;border-radius:8px}
+.penbtn .pen{margin:0;width:28px;height:28px}
+.rrrow{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.rrrow .yds{width:6em;font-size:17px;font-weight:700;text-align:center;border:2px solid var(--accent);border-radius:8px;padding:7px 8px}
+.pen{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:5px;border-radius:6px;color:var(--accent);background:var(--accent-soft);vertical-align:-5px}
+.pen.on{background:var(--accent);color:var(--accent-ink)}
+td.tdedit:active{background:var(--accent-soft)}
+td.tbr,th.tbr{position:relative;width:14px;min-width:14px;padding:0}
+.br{position:absolute;left:3px;width:6px;border-right:1px solid var(--muted);opacity:.7}
+.br.first{top:50%;bottom:-1px;border-top:1px solid var(--muted);border-top-right-radius:4px}
+.br.mid{top:-1px;bottom:-1px}
+.br.mid::after{content:"";position:absolute;top:50%;left:0;right:0;border-top:1px solid var(--muted)}
+.br.last{top:-1px;bottom:50%;border-bottom:1px solid var(--muted);border-bottom-right-radius:4px}
+.chip.review{margin-left:8px;cursor:pointer;font-size:10px;padding:1px 7px;vertical-align:1px}
+.tb{display:inline-block;border:2px solid var(--accent);border-radius:999px;padding:0 6px;margin:-2px -8px -2px 0;line-height:1.35}
+tr.cut td{border-top:2px solid var(--mark)}
+tr.out td{opacity:.5}
+.rank{font-family:var(--f-display);font-weight:700;font-size:16px}
+/* bracket */
+.bracket{overflow-x:auto;padding-bottom:6px}
+.rounds{display:flex;gap:44px;min-width:max-content;align-items:stretch}
+.round{display:flex;flex-direction:column;gap:10px;width:230px}
+.round>.rl{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.round>.ms{display:flex;flex-direction:column;flex:1}
+.pair{flex:1;display:flex;flex-direction:column;position:relative}
+.mw{flex:1;display:flex;align-items:center;position:relative;padding:10px 0}
+.mw>.match{width:100%}
+.rounds{position:relative}
+svg.blines{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:0}
+svg.blines path{fill:none;stroke:var(--muted);stroke-width:1;opacity:.7}
+.round,.champ{position:relative;z-index:1}
+.mw.feed{flex-direction:column;justify-content:center;gap:6px}
+.round>.champ{position:absolute;left:0;right:0;top:24px;width:auto;margin:0}
+
+.match{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.match .slot{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-bottom:1px solid var(--line);min-height:32px}
+.match .slot:last-of-type{border-bottom:0}
+.slot .seed{width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--f-mono);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.slot .seed.none{background:transparent}
+.slot.lose .seed{opacity:.55}
+.slot .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot .yd{font-weight:700;font-size:13px}
+.slot.win{background:var(--accent-soft)} .slot.win .nm{font-weight:700}
+.slot.lose .nm,.slot.lose .yd{color:var(--muted)}
+.slot.tbd .nm{color:var(--muted);font-style:italic}
+.match .st{font-size:11px;padding:4px 9px;background:var(--panel2);color:var(--muted);border-top:1px solid var(--line)}
+.match .st.mark{background:var(--mark-soft);color:var(--ink)}
+.match .st.bad{background:var(--bad-soft);color:var(--bad)}
+.match .st:has(.stbtn){display:flex;align-items:center;justify-content:space-between;gap:8px}
+.stbtn{padding:3px 12px;font-size:12px}
+.chip.tiny{font-size:9.5px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.setbox.rehit{border-color:var(--mark);background:var(--mark-soft)}
+.addset{border-style:dashed;align-items:center;justify-content:center;color:var(--accent);min-height:96px;cursor:pointer}
+.addset .plus{font-family:var(--f-display);font-size:30px;line-height:1;font-weight:700}
+.champ{align-self:center;border:2px solid var(--mark);border-radius:10px;padding:10px 14px;background:var(--mark-soft);width:200px}
+.champ small{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.champ div{font-family:var(--f-display);font-size:22px;font-weight:800;text-transform:uppercase}
+/* entry */
+.hcard{display:flex;flex-direction:column;gap:12px}
+.sets{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr))}
+.elist{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.erow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:11px 14px;min-height:56px;color:var(--ink);font-weight:400}
+.erow:last-child{border-bottom:0}
+.erow.act{background:var(--accent-soft)}
+.erow.out{opacity:.55}
+.ename{display:flex;align-items:center;font-weight:600;font-size:15px;min-width:0}
+.ename span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.esub{font-size:12px;color:var(--muted)}
+.ecta{flex:none;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
+.echev{flex:none;color:var(--muted);font-size:22px;line-height:1}
+.sheet{max-height:min(88vh,760px);overflow:auto;padding:14px 16px 18px}
+.sheethead{display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:-14px;background:var(--panel);padding:2px 0 8px;z-index:1}
+.sheet .hcard{border:0;padding:0;background:transparent;gap:10px}
+.sheet .hcard>.sechead:first-child{display:none}
+.sheet .setbox{padding:9px}
+.sheet .big{font-size:20px}
+.sheet .sets{display:flex;flex-direction:column;gap:8px}
+.sheet .setbox{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:3px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.sheet .setbox:has(input.yds:not([disabled])){border:2px solid var(--accent);background:var(--panel);padding:11px 13px}
+.sheet .setbox.rehit{background:var(--mark-soft);border-color:var(--mark)}
+.sheet .setbox>*{grid-column:1}
+.sheet .setbox>.big,.sheet .setbox>.row:not(.sh){grid-column:2;grid-row:1/span 2;justify-self:end}
+.sheet .setbox>.confirm,.sheet .setbox>.note{grid-column:1/-1}
+.sheet .setbox>.chip{justify-self:start}
+.sheet .setbox .sh{gap:8px;justify-content:flex-start!important}
+.sheet .setbox .sh strong{font-size:14.5px}
+.sheet .setbox .big{font-size:18px}
+.sheet .setbox .row:not(.sh){flex-wrap:nowrap;gap:6px}
+.sheet .setbox .yds{width:5.6em;font-size:18px;font-weight:700;padding:8px 10px;border:2px solid var(--accent);border-radius:8px;background:var(--panel);text-align:center}
+.sheet .setbox .yds:disabled{border:1px dashed var(--line);background:transparent}
+.sheet .setbox .yds::placeholder{font-weight:500;color:var(--muted)}
+.sheet .setbox button{padding:9px 13px}
+.sheet .addset{flex-direction:row;gap:8px;min-height:0;padding:12px 14px;border:1px dashed var(--accent);border-radius:10px;justify-content:center;background:transparent}
+.sheet .addset .plus{font-size:20px}
+@media (max-width:380px){.sheet .setbox{grid-template-columns:1fr}.sheet .setbox>.big,.sheet .setbox>.row:not(.sh){grid-column:1;grid-row:auto;justify-self:start}}
+.sheet .hcard .sec{border-top:0!important;padding-top:4px!important;gap:6px}
+@media (max-width:600px){.sheet-back{place-items:end center;padding:0}.sheet{max-width:100%;border-radius:16px 16px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}}
+.setbox{border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--panel2)}
+.big{font-family:var(--f-mono);font-size:24px;font-weight:700}
+.confirm{background:var(--mark-soft);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.phases{display:flex;flex-wrap:wrap;gap:6px}
+.phases span{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);color:var(--muted)}
+.phases span.now{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.phases span.done{color:var(--accent);border-color:var(--accent)}
+.track{position:relative;padding-block:4px 2px}
+.track .rail{position:absolute;left:12.5%;right:12.5%;top:17px;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.track .fill{height:100%;width:var(--pct);background:var(--accent);border-radius:3px}
+.track .steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));position:relative}
+.track .step{display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;min-width:0}
+.track .dot{width:31px;height:31px;border-radius:50%;background:var(--panel);border:3px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.track .step.done .dot{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.track .step.now .dot{border-color:var(--accent);box-shadow:0 0 0 5px var(--accent-soft)}
+.track .step.now .dot::after{content:"";width:11px;height:11px;border-radius:50%;background:var(--accent)}
+.track .step strong{font-size:13px}
+.track .step:not(.done):not(.now) strong{color:var(--muted)}
+.track .cap{font-family:var(--f-mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:no-preference){.track .fill{transition:width .7s ease}.track .step.now .dot::after{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{transform:scale(.6);opacity:.55}}
+@media (max-width:480px){.track .step strong{font-size:11.5px}.track .cap{font-size:10px}}
+.roster{display:flex;flex-direction:column}
+.rrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.rrow:last-child{border-bottom:0}
+.rmain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.rrow.out .rmain{opacity:.5}
+.rname{background:none;border:0;padding:0;text-align:left;font-weight:600;font-size:14px;display:flex;align-items:center;min-width:0;max-width:100%;cursor:pointer;color:var(--ink)}
+.rname span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rname:hover span:last-child{text-decoration:underline}
+.rsub{display:flex;flex-wrap:wrap;column-gap:0;font-size:11.5px;color:var(--muted);min-width:0}
+.rsub>span+span::before{content:"·";margin:0 6px;color:var(--muted);font-weight:400}
+.rsub .rem{max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rsub .ok{color:var(--accent);font-weight:600}
+.racts{display:flex;gap:6px;align-items:center;flex:none}
+.pill{border-radius:999px;padding:3px 11px;font-size:12px}
+.pill.danger{color:var(--bad);border-color:var(--line)}
+.pill.danger:hover{border-color:var(--bad)}
+button.solidbtn{background:var(--bad);color:var(--bg);border-color:var(--bad)}
+.pill:disabled,.locked{opacity:.42}
+.locked{cursor:not-allowed}
+.lrow{flex-wrap:wrap}
+.lsel{display:flex;gap:8px;flex-wrap:wrap}
+.lsel select{max-width:15em}
+.pick{max-height:min(50vh,420px);overflow:auto;border:1px solid var(--line);border-radius:8px;padding:0 10px}
+.pickrow{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.pickrow:last-child{border-bottom:0}
+.pickrow input{width:18px;height:18px;flex:none}
+.pform{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pform .wide{grid-column:1/-1}
+.pform select,.pform input{width:100%}
+.warnback{z-index:40}
+.shlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;max-height:min(50vh,420px);overflow:auto}
+.shrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.shrow:last-child{border-bottom:0}
+.shrow .ename{font-size:14px}
+.shrow .esub{text-align:right;flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toastbtn{margin-left:10px;background:transparent;color:var(--bg);border:1px solid currentColor;border-radius:999px;padding:3px 12px;font-weight:700}
+.rrsum .row:not(.sh){align-items:center;gap:8px}
+.modal-back{position:fixed;inset:0;z-index:30;background:rgba(8,14,11,.55);display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));overflow-y:auto}
+.modal{width:100%;max-width:480px;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+.modal textarea{width:100%}
+.flag{font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif;margin-right:6px;font-size:1.05em;line-height:1}
+.subtabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto;margin-top:-6px}
+.subtabs button{border:0;border-radius:0;background:transparent;color:var(--muted);padding:9px 14px;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.subtabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.li.focus{background:var(--mark-soft);border-radius:8px;padding-left:8px;padding-right:8px;outline:2px solid var(--mark)}
+.subnav{display:flex;flex-wrap:wrap;gap:8px}
+.subnav button{border-radius:999px;padding:8px 16px;background:var(--panel);border:1px solid var(--line);color:var(--ink);white-space:nowrap}
+.subnav button:hover{border-color:var(--accent)}
+.subnav button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.cols{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));align-items:start}
+.cols>*{min-width:0}
+.list{display:flex;flex-direction:column}
+.list>.li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.list>.li:last-child{border-bottom:0}
+.li .grow{flex:1 1 160px;min-width:0}
+.log{max-height:320px;overflow:auto;font-size:12.5px}
+.log .li{padding:5px 0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.match,.setbox{transition:background-color .2s}}
+@media (max-width:560px){.brand h1{font-size:21px} nav.tabs{width:100%} nav.tabs a{flex:1;text-align:center;padding:7px 6px}}
+nav.tabs a.acct{font-size:12px;opacity:.6}
+@media (max-width:560px){nav.tabs a.acct{flex:0 0 auto}}
+</style>
+
+<header class="band"><div class="wrap">
+  <div class="brand"><small id="hdrSub">Long drive · Live scoring</small><h1 id="hdrName">LetItFly</h1></div>
+  <nav class="tabs" id="tabs" aria-label="Views"></nav>
+</div></header>
+<main class="wrap" id="app">
+  <div class="panel"><h2>Loading event</h2><p class="muted">Standings and brackets appear here once the live event data loads.</p></div>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script src="/runtime.js"></script>
+<script>
+(function(){
+"use strict";
+/* ---------- state ---------- */
+const S={db:null,user:null,me:{id:null,isOwner:false},canWrite:null,
+  event:null,admin:{},joins:{},rr:{},commits:{},reveals:{},vault:{},aheadUse:[],
+  loaded:false,stale:false,noDb:false,profiles:{},brackets:[],keyIndex:{},
+  confirm:null,busy:false,revealing:false,seedDraft:{},testN:28};
+const D={}; // input drafts
+const vcache={};
+const VIEWS=["tracker","enter","director"];
+const view=()=>{if(S.view&&VIEWS.includes(S.view))return S.view;const h=(location.hash||"").slice(1);return VIEWS.includes(h)?h:"tracker"};
+function goView(v){S.view=v;S.confirm=null;S.modal=null;S.sub=null;S.warn=null;S.mpEdit=null;try{if(location.hash!=="#"+v)history.replaceState?history.replaceState(null,"","#"+v):location.hash=v;}catch(e){}schedule();scrollTo(0,0);}
+
+/* ---------- helpers ---------- */
+const clone=o=>o==null?o:JSON.parse(JSON.stringify(o));
+const rid=p=>p+Math.random().toString(36).slice(2,10);
+function el(tag,props,...kids){const e=document.createElement(tag);let val;
+  if(props&&props.lockReason){const why=props.lockReason;props=Object.assign({},props,{lockReason:null,onclick:ev=>{ev&&ev.preventDefault&&ev.preventDefault();toast(why);},"aria-disabled":"true",class:(props.class||"")+" locked"});}
+  else if(props&&"lockReason" in props){props=Object.assign({},props);delete props.lockReason;}
+  if(props)for(const k in props){const v=props[k];if(v==null||v===false)continue;
+    if(k==="class")e.className=v;else if(k==="text")e.textContent=v;else if(k.startsWith("on"))e.addEventListener(k.slice(2),v);
+    else if(k==="value")val=v;else if(["checked","disabled","selected"].includes(k))e[k]=!!v;else e.setAttribute(k,v===true?"":v);}
+  for(const c of kids.flat(Infinity)){if(c==null||c===false)continue;e.append(c instanceof Node?c:document.createTextNode(String(c)));}
+  if(val!==undefined)e.value=val;return e;}
+function inp(key,props={},def=""){const e=el(props.tag||"input",Object.assign({id:"i_"+key},props,{tag:null}));
+  e.value=key in D?D[key]:def;e.addEventListener("input",()=>{D[key]=e.value});return e;}
+const fmt=v=>v==null||v===""?"—":(Math.round(v*10)/10).toString();
+const tstr=t=>t?new Date(t).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"";
+let toastT;function toast(m,act){const t=document.getElementById("toast");t.textContent=m;
+  if(act&&t.append){const b=document.createElement("button");b.className="toastbtn";b.textContent=act.label;b.onclick=()=>{t.hidden=true;act.fn();};t.append(" ",b);}
+  t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,act?7000:2600);}
+function parseYds(s){const v=Number(String(s).trim());if(!String(s).trim()||!isFinite(v)||v<0||v>700)return null;return Math.round(v*10)/10;}
+async function sha(str){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");}
+function hashOf(str){if(str in vcache)return vcache[str]==="…"?null:vcache[str];vcache[str]="…";sha(str).then(h=>{vcache[str]=h;schedule()}).catch(()=>{delete vcache[str]});return null;}
+const queues={};
+function write(path,data){const p=(queues[path]||Promise.resolve()).then(()=>S.db.doc(path).set(data));queues[path]=p.catch(()=>{});return p;}
+
+/* ---------- defaults ---------- */
+function defaultEvent(){const d=new Date();return{
+  name:"Satellite League Event",date:d.toISOString().slice(0,10),rrSets:3,balls:6,mpBalls:6,
+  divisions:[{id:"d1",name:"Champions",size:10,fill:"playin"},{id:"d2",name:"Competitors",size:8,fill:"playin"},{id:"d3",name:"Contender",size:0,fill:"playin"}],
+  hitters:[],assign:{},phase:"setup",seeding:null,rehits:{}};}
+const EV=()=>S.event;
+const EK=()=>EV()?.eid?EV().eid+":":"";const nk=hid=>EK()+hid;
+function curKey(k){const p=EK();if(p)return k.startsWith(p)?k.slice(p.length):null;return k.includes(":")?null:k;}
+const hitter=id=>(EV()?.hitters||[]).find(h=>h.id===id);
+const nameOf=id=>id==="BYE"?"Bye":(hitter(id)?.name||"Unknown hitter");
+const idOf=a=>(a||[]).find(x=>!x.includes(":")&&x!=="noself");
+function perms(u){const a=(EV()?.assign||{})[u]||[],me=idOf(a),h=me?hitter(me):null,facs=new Set(a.filter(x=>x.startsWith("loc:")).map(x=>x.slice(4)));
+  if(h&&h.site&&!a.includes("noself"))facs.add(h.site);return{me,h,facs,people:new Set(a.filter(x=>x.startsWith("for:")).map(x=>x.slice(4)))};}
+function assigned(u,hid){if(u&&EV()?.ownerId===u&&hitter(hid))return true;const a=(EV()?.assign||{})[u];if(!a||!a.length)return false;const p=perms(u);if(p.me===hid||p.people.has(hid))return true;
+  const site=hitter(hid)?.site;return!!site&&p.facs.has(site);}
+const isOut=x=>x==="BYE"||hitter(x)?.status==="withdrawn";
+
+/* ---------- countries ---------- */
+const CC="AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" ");
+const SUB={"GB-ENG":"England","GB-SCT":"Scotland","GB-WLS":"Wales","GB-NIR":"Northern Ireland"};
+let DN=null;try{DN=new Intl.DisplayNames(["en"],{type:"region"})}catch(e){}
+const cName=c=>!c?"":SUB[c]||(DN&&DN.of(c))||c;
+function flagEmoji(c){if(!c)return"";if(c==="GB-NIR")return"\u{1F1EC}\u{1F1E7}";
+  if(SUB[c])return"\u{1F3F4}"+[...c.toLowerCase().replace("-","")].map(ch=>String.fromCodePoint(0xE0000+ch.charCodeAt(0))).join("")+"\u{E007F}";
+  return[...c].map(ch=>String.fromCodePoint(0x1F1E6+ch.charCodeAt(0)-65)).join("");}
+const flc=c=>c?el("span",{class:"flag",onclick:()=>toast(cName(c)),role:"img","aria-label":cName(c)},flagEmoji(c)):null;
+const fl=id=>flc(hitter(id)?.country);
+const ALIAS={USA:"US",UK:"GB","UNITED STATES":"US","UNITED KINGDOM":"GB",ENGLAND:"GB-ENG",SCOTLAND:"GB-SCT",WALES:"GB-WLS","NORTHERN IRELAND":"GB-NIR"};
+function parseCountry(t){t=(t||"").trim();if(!t)return"";const u=t.toUpperCase();if(CC.includes(u)||SUB[u])return u;if(ALIAS[u])return ALIAS[u];
+  return CC.find(c=>cName(c).toLowerCase()===t.toLowerCase())||"";}
+function parseLine(l){const parts=l.split(",").map(x=>x.trim());const name=parts.shift();let country="",email="";const site=[];const locs=facList().map(f=>f.label);
+  for(const x of parts){if(!x)continue;if(!email&&x.includes("@")){email=x.toLowerCase();continue;}const c=!country&&parseCountry(x);if(c){country=c;continue;}
+    site.push(locs.find(L=>L.toLowerCase()===x.toLowerCase())||x);}
+  return{id:rid("h"),name,country,email,site:site.join(", "),status:"active",addedAt:Date.now()};}
+const COMMON=["CA","US","GB-ENG","GB-SCT","GB-WLS","GB-NIR","IE","AU","NZ","ZA","MX","JP","KR","SE","DE"];
+let ALLSORT=null;
+function countrySelect(id,value,onchange,label){ALLSORT=ALLSORT||CC.slice().sort((a,b)=>cName(a).localeCompare(cName(b)));
+  const o=c=>el("option",{value:c},flagEmoji(c)+" "+cName(c));
+  return el("select",{id,"aria-label":label||"Country",value:value||"",onchange},el("option",{value:""},"Country…"),el("optgroup",{label:"Common"},COMMON.map(o)),el("optgroup",{label:"All countries"},ALLSORT.map(o)));}
+
+/* ---------- round robin ---------- */
+function rrCell(hid,i){const o=S.admin?.rr?.[hid]?.[i];if(typeof o==="number")return{v:o,src:"td"};
+  let best=null;for(const [u,d] of Object.entries(S.rr)){if(!assigned(u,hid))continue;const c=d?.e?.[nk(hid)]?.[i];
+    if(c&&typeof c.v==="number"&&(!best||c.at>best.at))best={v:c.v,at:c.at,uid:u,src:"entry",edited:!!(c.hist&&c.hist.length)};}
+  return best;}
+function ranking(){const ev=EV();if(!ev)return[];const n=ev.rrSets;
+  const rows=ev.hitters.filter(h=>h.status!=="withdrawn").map(h=>{const cells=[...Array(n)].map((_,i)=>rrCell(h.id,i));
+    const vals=cells.filter(Boolean).map(c=>c.v).sort((a,b)=>b-a);return{h,cells,vals,long:vals.length?vals[0]:null}});
+  const cmp=(a,b)=>{for(let i=0;i<Math.max(a.vals.length,b.vals.length);i++){const x=a.vals[i]??-1,y=b.vals[i]??-1;if(x!==y)return y-x;}return 0};
+  rows.sort((a,b)=>cmp(a,b)||a.h.name.localeCompare(b.h.name));
+  rows.forEach((r,i)=>{r.rank=i+1;r.tie=r.vals.length>0&&((i>0&&cmp(r,rows[i-1])===0)||(i<rows.length-1&&cmp(r,rows[i+1])===0));});
+  const firstDiff=(a,b)=>{for(let k=0;k<Math.max(a.vals.length,b.vals.length);k++)if((a.vals[k]??-1)!==(b.vals[k]??-1))return k;return -1;};
+  rows.forEach((r,i)=>{r.tbCells=new Set();r.longTie=false;if(!r.vals.length)return;r.longTie=[rows[i-1],rows[i+1]].some(o=>o&&o.vals.length&&o.vals[0]===r.vals[0]);const ks=new Set();
+    for(const o of [rows[i-1],rows[i+1]])if(o&&o.vals.length&&o.vals[0]===r.vals[0]){const k=firstDiff(r,o);if(k>0&&k<r.vals.length)ks.add(k);}
+    if(!ks.size)return;const order=r.cells.map((c,j)=>[c?c.v:null,j]).filter(x=>x[0]!=null).sort((a,b)=>b[0]-a[0]||a[1]-b[1]).map(x=>x[1]);
+    ks.forEach(k=>{if(order[k]!=null)r.tbCells.add(order[k]);});});
+  for(let i=0;i<rows.length;){let j=i;while(j+1<rows.length&&rows[i].vals.length&&rows[j+1].vals.length&&rows[j+1].vals[0]===rows[i].vals[0])j++;
+    if(j>i)for(let k=i;k<=j;k++)rows[k].tg=k===i?"first":k===j?"last":"mid";i=j+1;}
+  rows.forEach(r=>{if(r.tie){const key=r.vals.join(",");r.tieWith=rows.filter(o=>o!==r&&o.vals.join(",")===key).map(o=>o.h.name);}});
+  return rows;}
+function project(ids,divs){const out=[];let i=0;
+  for(const d of divs){const size=d.size>0?d.size:Infinity;const seeds=ids.slice(i,i+size);i+=seeds.length;out.push({id:d.id,name:d.name,fill:d.fill,seeds});}
+  return{divs:out,leftover:ids.slice(i)};}
+
+/* ---------- bracket engine ---------- */
+function seedPositions(n){let p=[1,2];while(p.length<n){const m=p.length*2+1;p=p.flatMap(s=>[s,m-s]);}return p;}
+function roundLabel(n){return n===2?"Finals":n===4?"Final 4":n===8?"Elite 8":n===16?"Sweet 16":"Round of "+n;}
+function shape(N,fill){if(N<2)return{B:N,extra:0,byes:0};
+  if(fill==="bye"){const B=2**Math.ceil(Math.log2(N));return{B,extra:0,byes:B-N};}
+  const B=2**Math.floor(Math.log2(N));return{B,extra:N-B,byes:0};}
+function shapeText(N,fill){if(N===0)return"No hitters";if(N===1)return"1 hitter, no bracket";const s=shape(N,fill);
+  return N+" hitters · "+(s.extra?s.extra+" play-in match"+(s.extra>1?"es":"")+" → ":s.byes?s.byes+" bye"+(s.byes>1?"s":"")+" → ":"")+roundLabel(s.B);}
+function buildBracket(div){const N=div.seeds.length,ver=div.ver||"t",rounds=[];if(N<2)return rounds;
+  const {B,extra}=shape(N,div.fill),L=B-extra+1,slot={};
+  for(let s=1;s<=B;s++)slot[s]=s<=N?{seed:s}:{bye:true};
+  if(extra>0){const ms=[];for(let i=0;i<extra;i++){const id=`${ver}:${div.id}:0:${i}`;ms.push({id,a:{seed:L+i},b:{seed:N-i}});slot[L+i]={win:id};}
+    rounds.push({label:"Play-In",matches:ms});}
+  const order=seedPositions(B),r0=[],ri=rounds.length;
+  for(let k=0;k<B/2;k++)r0.push({id:`${ver}:${div.id}:${ri}:${k}`,a:slot[order[2*k]],b:slot[order[2*k+1]]});
+  rounds.push({label:roundLabel(B),matches:r0});let cur=r0,size=B/2;
+  while(cur.length>1){const rix=rounds.length,nx=[];for(let k=0;k<cur.length/2;k++)nx.push({id:`${ver}:${div.id}:${rix}:${k}`,a:{win:cur[2*k].id},b:{win:cur[2*k+1].id}});
+    rounds.push({label:roundLabel(size),matches:nx});cur=nx;size/=2;}
+  return rounds;}
+const mkey=id=>EK()+id+"#"+((EV()?.rehits||{})[id]||0);
+function aheadOf(hid){const out={};for(const [u,d] of Object.entries(S.commits)){if(!assigned(u,hid))continue;
+  for(const [k,c] of Object.entries(d?.ahead?.[nk(hid)]||{}))if(c&&c.h&&(!out[k]||c.at<out[k].c.at))out[k]={u,c};}return out;}
+function pickEntry(key,hid,idx){let d=null,a=null;
+  for(const [u,doc] of Object.entries(S.commits)){if(!assigned(u,hid))continue;
+    const c=doc?.m?.[key]?.[hid];if(c&&c.h&&(!d||c.at<d.c.at))d={u,c};
+    if(idx!=null){const x=doc?.ahead?.[nk(hid)]?.[idx];if(x&&x.h&&(!a||x.at<a.c.at))a={u,c:x};}}
+  return a&&(!d||a.c.at<=d.c.at)?Object.assign(a,{ahead:true}):d;}
+function entryFor(key,hid,idx){const best=pickEntry(key,hid,idx);const ovr=S.admin?.mpVal?.[key]?.[hid];
+  if(typeof ovr==="number")return{committed:true,revealed:true,v:ovr,src:"td",uid:best?.u,at:best?.c?.at,ahead:best&&best.ahead?idx:undefined};
+  if(!best)return{committed:false};
+  const base={committed:true,at:best.c.at,uid:best.u};let r,str;
+  if(best.ahead){base.ahead=idx;r=S.reveals[best.u]?.ahead?.[nk(hid)]?.[idx];if(!r){S.aheadUse.push({u:best.u,hid,idx,key});return base;}str=`ahead|${hid}|${idx}|${r.v}|${r.s}`;}
+  else{r=S.reveals[best.u]?.m?.[key]?.[hid];if(!r)return base;str=`${key}|${hid}|${r.v}|${r.s}`;}
+  const hv=hashOf(str);if(hv==null)return base;if(hv!==best.c.h)return Object.assign(base,{bad:true});
+  return Object.assign(base,{revealed:true,v:r.v});}
+function resolveDiv(div,rounds,live){const res={},played={};
+  const ref=r=>r.seed?div.seeds[r.seed-1]:r.bye?"BYE":res[r.win]?.winner;
+  for(const rd of rounds)for(const m of rd.matches){const a=ref(m.a),b=ref(m.b),r={id:m.id,a,b,status:"tbd",round:rd.label,dn:div.name,la:m.a.win?res[m.a.win]?.round:null,lb:m.b.win?res[m.b.win]?.round:null};res[m.id]=r;
+    if(a===undefined||b===undefined)continue;
+    const oa=isOut(a),ob=isOut(b);
+    if(oa&&ob){r.status="void";r.winner="BYE";continue;}
+    if(oa){r.status=a==="BYE"?"bye":"forfeit";r.winner=b;continue;}
+    if(ob){r.status=b==="BYE"?"bye":"forfeit";r.winner=a;continue;}
+    if(!live){r.status="ready";continue;}
+    r.pk=[a,b].sort().join("~");r.key=mkey(r.pk);const att=(EV()?.rehits||{})[r.pk]||0;
+    r.ia=played[a]||0;r.ib=played[b]||0;r.att=att;played[a]=r.ia+1;played[b]=r.ib+1;
+    r.ea=entryFor(r.key,a,att?null:r.ia);r.eb=entryFor(r.key,b,att?null:r.ib);
+    const td=S.admin?.mpWinner?.[r.pk];
+    if(td&&(td===a||td===b)){r.status="td";r.winner=td;continue;}
+    if(r.ea.revealed&&r.eb.revealed){if(r.ea.v>r.eb.v){r.status="done";r.winner=a}else if(r.eb.v>r.ea.v){r.status="done";r.winner=b}else r.status="tie";}
+    else r.status="live";}
+  return res;}
+function computeAll(){S.brackets=[];S.keyIndex={};S.aheadUse=[];const sd=EV()?.seeding;if(!sd)return;let off=0;
+  for(const div of sd.divisions){const myOff=off;off+=div.seeds.length;const rounds=buildBracket(div);const res=resolveDiv(div,rounds,true);
+    const last=rounds.length?rounds[rounds.length-1].matches[0]:null;
+    const champ=div.seeds.length===1?div.seeds[0]:last?res[last.id]?.winner:undefined;
+    S.brackets.push({div,rounds,res,off:myOff,champ:champ==="BYE"?undefined:champ});
+    for(const r of Object.values(res))if(r.key)S.keyIndex[r.key]={res:r,div};}}
+
+/* ---------- auto reveal ---------- */
+function reconcile(){if(!S.db||(!S.me.id&&!S.me.isOwner)||S.revealing||S.canWrite===false)return;
+  const docs={},get=u=>docs[u]=docs[u]||(clone(S.reveals[u])||{}),can=u=>u===S.me.id||S.me.isOwner;
+  const ready=(r,hid)=>{const opp=r.a===hid?r.b:r.a;if(opp===undefined)return false;return isOut(opp)||!!(r.a===hid?r.eb:r.ea)?.committed||r.winner!==undefined;};
+  for(const [u,vd] of Object.entries(S.vault)){if(!can(u)||!vd)continue;const com=S.commits[u]||{},rev=S.reveals[u]||{};
+    for(const key in vd.m||{}){const info=S.keyIndex[key];if(!info)continue;
+      for(const hid in vd.m[key]){if(rev.m?.[key]?.[hid]||!com.m?.[key]?.[hid]||!ready(info.res,hid))continue;
+        const d=get(u);d.m=d.m||{};d.m[key]=Object.assign(d.m[key]||{},{[hid]:{v:vd.m[key][hid].v,s:vd.m[key][hid].s,at:Date.now()}});}}}
+  for(const x of S.aheadUse){if(!can(x.u))continue;const vd=S.vault[x.u]?.ahead?.[nk(x.hid)]?.[x.idx];const info=S.keyIndex[x.key];
+    if(!vd||!info||!ready(info.res,x.hid))continue;
+    const d=get(x.u);d.ahead=d.ahead||{};d.ahead[nk(x.hid)]=Object.assign(d.ahead[nk(x.hid)]||{},{[x.idx]:{v:vd.v,s:vd.s,at:Date.now(),key:x.key}});}
+  const us=Object.keys(docs);if(!us.length)return;S.revealing=true;
+  Promise.all(us.map(u=>write("reveals/"+u,docs[u]).then(()=>{S.reveals[u]=docs[u]}))).catch(()=>{}).finally(()=>{S.revealing=false;schedule()});}
+
+/* ---------- director writes ---------- */
+async function saveEvent(mut,log){const ev=clone(EV())||defaultEvent();mut(ev);S.event=ev;schedule();
+  try{await write("event/main",ev);if(log)await addLog(log);}catch(e){toast("Couldn't save: "+(e?.message||e?.code||"error"));}}
+async function saveAdmin(mut,log){const a=clone(S.admin)||{};a.rr=a.rr||{};a.mpVal=a.mpVal||{};a.mpWinner=a.mpWinner||{};a.log=a.log||[];mut(a);
+  if(log){a.log.unshift({at:Date.now(),t:log,ev:EV()?.eid||""});a.log=a.log.slice(0,300);}S.admin=a;schedule();
+  try{await write("admin/state",a);}catch(e){toast("Couldn't save: "+(e?.message||e?.code||"error"));}}
+const addLog=t=>saveAdmin(()=>{},t);
+function applyChanges(a,cs){a.rr=a.rr||{};a.mpVal=a.mpVal||{};a.mpWinner=a.mpWinner||{};for(const c of cs){if(c.t==="rr"){const o=Object.assign({},a.rr[c.hid]);if(c.v==null)delete o[c.i];else o[c.i]=c.v;a.rr[c.hid]=o;}
+    else{const o=Object.assign({},a.mpVal[c.key]);if(c.v==null)delete o[c.hid];else o[c.hid]=c.v;a.mpVal[c.key]=o;if(c.pk!==undefined){if(c.w==null)delete a.mpWinner[c.pk];else a.mpWinner[c.pk]=c.w;}}}}
+async function numChange(cs,label){const a0=S.admin||{};
+  const prev=cs.map(c=>c.t==="rr"?{t:"rr",hid:c.hid,i:String(c.i),v:a0.rr?.[c.hid]?.[c.i]??null}:Object.assign({t:"mp",key:c.key,hid:c.hid,v:a0.mpVal?.[c.key]?.[c.hid]??null},c.pk!==undefined?{pk:c.pk,w:a0.mpWinner?.[c.pk]??null}:{}));
+  await saveAdmin(a=>{applyChanges(a,cs.map(c=>Object.assign({},c,{i:c.i!=null?String(c.i):c.i})));a.undo=(a.undo||[]).concat({at:Date.now(),label,prev,ev:EV()?.eid||""}).slice(-50);},label);
+  toast("Saved",{label:"Undo",fn:undoLast});}
+const undoList=()=>(S.admin?.undo||[]).filter(x=>(x.ev||"")===(EV()?.eid||""));
+async function undoLast(){const u=undoList(),last=u[u.length-1];if(!last)return toast("Nothing to undo");
+  await saveAdmin(a=>{applyChanges(a,last.prev);const k=a.undo.findIndex(x=>x.at===last.at&&x.label===last.label);if(k>=0)a.undo.splice(k,1);},"Undid: "+last.label);toast("Undone");}
+function undoBtn(){const u=undoList(),last=u[u.length-1];return el("button",{class:"pill",lockReason:last?null:"No director number changes to undo yet.",onclick:undoLast},last?"↶ Undo last change":"↶ Undo");}
+async function startNewEvent(){const ev=clone(EV()),old=ev.eid||"e0";
+  try{await write("archive/"+old,{event:ev,admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{}},archivedAt:Date.now()});}catch(e){toast("Couldn't archive this event, so nothing changed.");return;}
+  const d=defaultEvent();const nev=Object.assign(d,{rrSets:ev.rrSets,balls:ev.balls,mpBalls:ev.mpBalls,divisions:ev.divisions,eid:rid("e")});
+  await saveAdmin(a=>{a.rr={};a.mpWinner={};a.mpVal={};});S.event=nev;await write("event/main",nev);S.dtab="settings";S.seedDraft={};
+  await addLog(`Started a new event. Previous event “${ev.name}” saved to the archive.`);toast("New event started");}
+function newSeeding(){const ids=ranking().map(r=>r.h.id);const p=project(ids,EV().divisions);
+  return{at:Date.now(),divisions:p.divs.map(d=>Object.assign(d,{ver:rid("v")}))};}
+
+/* ---------- entrant writes ---------- */
+async function submitRR(hid,i,v,edit){const me=S.me.id;if(EV().phase!=="rr")return toast("Round robin is closed. Ask the director for a correction.");
+  const d=clone(S.rr[me])||{e:{}};d.e=d.e||{};const hk=nk(hid);d.e[hk]=d.e[hk]||{};const old=d.e[hk][i],cur=rrCell(hid,+i);
+  if(!edit&&cur)return toast("That set is already in. Use Edit to change it.");
+  const prev=old||(cur&&cur.src==="entry"?{v:cur.v,at:cur.at,by:cur.uid}:null);
+  d.e[hk][i]={v,at:Date.now(),hist:prev?[...(old?.hist||[]),Object.assign({v:prev.v,at:prev.at},prev.by&&prev.by!==me?{by:prev.by}:{})]:undefined};if(!prev)delete d.e[hk][i].hist;
+  S.busy=true;schedule();try{await write("rr/"+me,d);S.rr[me]=d;S.editRR=null;toast("Set "+(+i+1)+(edit?" updated":" submitted"));}catch(e){toast("Couldn't submit. Check your access and try again.");}
+  S.busy=false;S.confirm=null;schedule();}
+async function lockMatch(key,hid,v){const me=S.me.id;if(!rrDone(hid))return toast(`Finish all ${EV().rrSets} round robin sets first`);
+  if(S.commits[me]?.m?.[key]?.[hid])return toast("Already locked in.");
+  const s=rid("")+rid("");const h=await sha(`${key}|${hid}|${v}|${s}`);
+  const vault=clone(S.vault[me])||{};vault.m=vault.m||{};vault.m[key]=Object.assign(vault.m[key]||{},{[hid]:{v,s}});
+  const com=clone(S.commits[me])||{m:{}};com.m=com.m||{};com.m[key]=Object.assign(com.m[key]||{},{[hid]:{h,at:Date.now()}});
+  S.busy=true;schedule();
+  try{await write("vault/"+me,vault);S.vault[me]=vault;await write("commits/"+me,com);S.commits[me]=com;toast("Locked in. Revealed when your opponent locks in.");}
+  catch(e){toast("Couldn't lock in. Check your access and try again.");}
+  S.busy=false;S.confirm=null;schedule();}
+
+async function lockAhead(hid,k,v){const me=S.me.id;if(!rrDone(hid))return toast(`Finish all ${EV().rrSets} round robin sets first`);if(S.commits[me]?.ahead?.[nk(hid)]?.[k])return toast("Already locked in.");
+  const s=rid("")+rid("");const h=await sha(`ahead|${hid}|${k}|${v}|${s}`);
+  const vault=clone(S.vault[me])||{};vault.ahead=vault.ahead||{};vault.ahead[nk(hid)]=Object.assign(vault.ahead[nk(hid)]||{},{[k]:{v,s}});
+  const com=clone(S.commits[me])||{};com.ahead=com.ahead||{};com.ahead[nk(hid)]=Object.assign(com.ahead[nk(hid)]||{},{[k]:{h,at:Date.now()}});
+  S.busy=true;schedule();
+  try{await write("vault/"+me,vault);S.vault[me]=vault;await write("commits/"+me,com);S.commits[me]=com;toast(`Match set ${+k+1} locked in`);}
+  catch(e){toast("Couldn't lock in. Check your access and try again.");}
+  S.busy=false;S.confirm=null;schedule();}
+
+async function openRehit(r){if(!S.me.isOwner||!r.pk)return;
+  await saveEvent(e=>{e.rehits=e.rehits||{};e.rehits[r.pk]=(e.rehits[r.pk]||0)+1},`${r.dn||""} ${r.round}: opened a rehit for ${nameOf(r.a)} vs ${nameOf(r.b)}`.trim());
+  if(S.admin?.mpWinner?.[r.pk])await saveAdmin(a=>{delete a.mpWinner[r.pk]});
+  toast("Rehit opened. Both hitters can enter a new number.");}
+
+/* ---------- bracket lines ---------- */
+function drawBracketLines(){if(!document.querySelectorAll)return;
+  document.querySelectorAll(".rounds").forEach(R=>{R.querySelectorAll("svg.blines").forEach(x=>x.remove());
+    R.querySelectorAll(".round.haschamp").forEach(col=>{const lab=col.querySelector(".rl"),card=col.querySelector("[data-mid]"),ch=col.querySelector(".champ"),ms=col.querySelector(".ms");if(!lab||!card||!ch||!ms)return;
+      ms.style.paddingTop="";let L=lab.getBoundingClientRect(),C=card.getBoundingClientRect();const H=ch.getBoundingClientRect().height,need=H+32;
+      if(C.top-L.bottom<need){ms.style.paddingTop=Math.ceil(2*(need-(C.top-L.bottom)))+"px";C=card.getBoundingClientRect();L=lab.getBoundingClientRect();}
+      const top=(L.bottom+C.top)/2-H/2-col.getBoundingClientRect().top;ch.style.top=Math.round(top)+"px";});
+    const midOf=c=>{const ss=c.querySelectorAll(".slot"),r=c.getBoundingClientRect();return ss.length>=2?(ss[0].getBoundingClientRect().top+ss[1].getBoundingClientRect().bottom)/2:(r.top+r.bottom)/2;};
+    R.querySelectorAll(".mw.feed").forEach(mw=>{const cs=mw.querySelectorAll("[data-mid]");if(cs.length!==1)return;const c=cs[0];c.style.transform="";
+      const slot=R.querySelector(`[data-from="${c.getAttribute("data-mid")}"]`);if(!slot)return;const sr=slot.getBoundingClientRect();c.style.transform=`translateY(${Math.round((sr.top+sr.bottom)/2+18-midOf(c))}px)`;});
+    const base=R.getBoundingClientRect();
+    const ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");svg.setAttribute("class","blines");svg.setAttribute("width",R.scrollWidth);svg.setAttribute("height",R.scrollHeight);
+    const rel=el=>{const b=el.getBoundingClientRect();return{l:b.left-base.left,r:b.right-base.left,t:b.top-base.top,b:b.bottom-base.top,cy:(b.top+b.bottom)/2-base.top};};
+    const line=(x1,y1,x2,y2)=>{const xm=Math.round(x1+(x2-x1)/2)+.5;const p=document.createElementNS(ns,"path");p.setAttribute("d",`M${x1} ${y1+.5}H${xm}V${y2+.5}H${x2}`);svg.appendChild(p);};
+    R.querySelectorAll("[data-from]").forEach(slot=>{const src=R.querySelector(`[data-mid="${slot.getAttribute("data-from")}"]`);if(!src)return;
+      const a=rel(src),b=rel(slot);const srcSlots=[...src.querySelectorAll(".slot")];const y1=srcSlots.length>=2?(rel(srcSlots[0]).t+rel(srcSlots[1]).b)/2:a.cy;line(a.r,Math.round(y1),b.l,Math.round(b.cy));});
+    R.insertBefore(svg,R.firstChild);});}
+let lineT;window.addEventListener("resize",()=>{clearTimeout(lineT);lineT=setTimeout(drawBracketLines,120);});
+
+/* ---------- render plumbing ---------- */
+let pend=false;function schedule(){if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;render();});}
+function render(){const app=document.getElementById("app");const a=document.activeElement;const fid=a&&a.id;let sel=null;
+  try{sel=[a.selectionStart,a.selectionEnd]}catch(e){}
+  if(EV())computeAll();
+  renderHeader();const v=view();app.replaceChildren(...[].concat(v==="enter"?vEnter():v==="director"?vDirector():vTracker()));
+  if(S.sub&&S.sub.startsWith("rrrow:")&&S.me.isOwner&&EV()&&hitter(S.sub.slice(6)))app.append(rrRowModal(S.sub.slice(6)));
+  if(S.warn)app.append(warnModal());
+  if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement){n.focus({preventScroll:true});try{if(sel&&sel[0]!=null)n.setSelectionRange(sel[0],sel[1])}catch(e){}}}
+  if(S.focusId){const n=document.getElementById(S.focusId);if(n){n.focus();S.focusId=null;}}
+  if(S.focusMatch&&view()==="director"){const n=document.getElementById("mc_"+S.focusMatch);if(n&&n.scrollIntoView&&!S.focusDone){S.focusDone=true;requestAnimationFrame(()=>n.scrollIntoView({block:"center",behavior:"smooth"}));
+    setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
+  if(S.me.isOwner){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
+  reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
+function renderHeader(){const ev=EV();document.getElementById("hdrName").textContent=ev?.name||"LetItFly";
+  document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
+  const tabs=[["tracker","Tracker"],["enter","Enter scores"]];if(S.me.isOwner||S.noDb)tabs.push(["director","Director"]);
+  document.getElementById("tabs").replaceChildren(...tabs.map(([k,l])=>el("a",{href:"#"+k,"aria-current":view()===k?"page":null,text:l,onclick:e=>{e.preventDefault();goView(k);}})),
+    S.me.id?el("a",{href:"#",class:"acct",text:"Sign out",onclick:async e=>{e.preventDefault();try{await LIF.logout()}catch(x){}location.hash="#tracker";location.reload();}})
+      :el("a",{href:"#enter",class:"acct",text:"Sign in",onclick:e=>{e.preventDefault();goView("enter");}}));}
+const phaseName=p=>({setup:"Setup",rr:"Round robin",match:"Match play",final:"Complete"})[p]||"Setup";
+let lastIds="";function refreshProfiles(){if(!S.user)return;const ids=[...new Set([...Object.keys(S.joins),...Object.keys(EV()?.assign||{}),...Object.keys(S.rr),...Object.keys(S.commits),S.me.id].filter(Boolean))];
+  const k=ids.sort().join(",");if(k===lastIds||!ids.length)return;lastIds=k;
+  S.user.profiles(ids).then(ps=>{S.profiles=Object.assign({},S.profiles,ps);schedule();}).catch(()=>{});}
+let linking=false;function autoLink(){if(linking||!S.lib||!EV())return;migrateLib();migrateFac();const byEmail={};for(const h of EV().hitters){const e=emailOf(h.id);if(e)byEmail[e.toLowerCase()]=h.id;}
+  const add=[];for(const u of Object.keys(S.joins)){const em=S.profiles[u]?.email;if(!em)continue;const h=byEmail[em.toLowerCase()];
+    if(h&&hitter(h)&&!((EV().assign||{})[u]||[]).includes(h)&&!(S.autoDone||(S.autoDone=new Set())).has(u+h))add.push([u,h]);}
+  if(!add.length)return;linking=true;add.forEach(([u,h])=>S.autoDone.add(u+h));
+  saveEvent(e=>{e.assign=e.assign||{};add.forEach(([u,h])=>{e.assign[u]=(e.assign[u]||[]).concat(h);});},"Linked by email: "+add.map(([u,h])=>`${pname(u)} → ${nameOf(h)}`).join(", ")).finally(()=>{linking=false;});}
+let migrating=false;function migrateLib(){if(migrating||!S.lib||!S.libLoaded||!S.privLoaded||!EV())return;const missing=EV().hitters.filter(h=>!S.lib.hitters?.[h.id]);if(!missing.length)return;
+  migrating=true;saveLib(l=>missing.forEach(h=>l.hitters[h.id]={name:h.name,country:h.country||"",site:h.site||"",email:S.priv?.emails?.[h.id]||"",addedAt:h.addedAt||Date.now()}),`Moved ${missing.length} roster hitters into the library`).finally(()=>{migrating=false;});}
+const pname=u=>(S.profiles[u]&&S.profiles[u].name)||(u===S.me.id?"You":"Signed-in person");
+
+/* ---------- TRACKER ---------- */
+function pencil(on){const sp=document.createElement("span");sp.className="pen"+(on?" on":"");sp.setAttribute("aria-label",on?"Edit (director value)":"Edit");sp.setAttribute("role","img");
+  try{sp.innerHTML='<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M11.3 1.6a1.5 1.5 0 0 1 2.1 0l1 1a1.5 1.5 0 0 1 0 2.1L5.6 13.5 2 14l.5-3.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';}catch(e){sp.textContent="✎";}return sp;}
+function rrRowModal(hid){const ev=EV(),h=hitter(hid),n=ev.rrSets,close=()=>{S.sub=null;for(let i=0;i<n;i++)delete D["rrr_"+i];schedule();};
+  const cells=[...Array(n)].map((_,i)=>rrCell(hid,i));
+  const inputs=cells.map((c,i)=>inp("rrr_"+i,{class:"yds",inputmode:"decimal",placeholder:"yds","aria-label":`Set ${i+1}`},c?String(c.v):""));
+  const save=()=>{const ch=[];for(let i=0;i<n;i++){const raw=inputs[i].value.trim(),c=cells[i];if(!raw){continue;}const v=parseYds(raw);if(v==null)return toast(`Set ${i+1}: enter the distance in yards`);if(!c||v!==c.v)ch.push([i,v,c]);}
+    close();if(!ch.length)return;numChange(ch.map(([i,v])=>({t:"rr",hid,i,v})),`Round robin: ${h.name} `+ch.map(([i,v,c])=>`set ${i+1} → ${fmt(v)}${c?` (was ${fmt(c.v)})`:""}`).join(", "));};
+  const clear=i=>{numChange([{t:"rr",hid,i,v:null}],`Round robin: removed director value for ${h.name} set ${i+1}`);delete D["rrr_"+i];};
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"rrrh",style:"max-width:440px"},
+      el("div",{class:"sechead"},el("h2",{id:"rrrh"},flc(h.country),h.name),el("span",{class:"chip",text:"Round robin"})),
+      ev.seeding?el("div",{class:"note warn small",text:"Brackets are already locked. Changes update the standings only. Seeds change only if you re-seed."}):null,
+      el("form",{class:"sec",style:"gap:8px",onsubmit:e=>{e.preventDefault();save()}},cells.map((c,i)=>el("div",{class:"rrrow"},
+        el("div",{class:"rmain"},el("strong",{text:"Set "+(i+1)}),el("span",{class:"rsub"},el("span",{text:c?(c.src==="td"?"Set by the director":(c.edited?"Edited ":"Submitted ")+tstr(c.at)):"No number yet"}))),
+        c&&c.src==="td"?el("button",{class:"pill",type:"button",onclick:()=>clear(i)},"Use hitter's entry"):null,inputs[i])),
+        el("button",{type:"submit",hidden:true,tabindex:"-1","aria-hidden":"true"})),
+      el("div",{class:"row",style:"justify-content:space-between"},undoBtn(),el("div",{class:"row"},el("button",{class:"ghost",onclick:close},"Cancel"),el("button",{class:"primary",onclick:save},"Save"))),
+      el("p",{class:"muted small",style:"margin:0"},"Director values override any entry for that set and are recorded in the Log.")));}
+function vTracker(){const out=[];
+  if(S.modal&&S.modal.startsWith("enter:")&&S.me.isOwner&&EV()){const h=hitter(S.modal.slice(6));if(h)out.push(enterSheet(h));}
+  if(S.noDb)out.push(el("div",{class:"note warn"},"Live event data loads on the published page. Open the Director tab to test how any field size splits into divisions and brackets."));
+  if(S.stale)out.push(el("div",{class:"note warn"},"Can't reach the live event data yet. What you see may be out of date."));
+  const ev=EV();
+  if(!ev){out.push(el("div",{class:"panel sec"},el("h2",{text:"No event set up yet"}),
+    el("p",{class:"muted"},S.me.isOwner?"Open the Director tab to name the event, set the format and add hitters. Standings and brackets will show here live.":"The director hasn't set up this event yet. Standings and brackets will show here live once they do.")));return out;}
+  // brackets first in match play
+  if(ev.seeding&&S.brackets.length){const mpSec=()=>el("section",{class:"sec mp"},el("div",{class:"sechead"},el("h2",{text:"Match Play"}),el("span",{class:"muted small",text:`1 set × ${ev.mpBalls} balls per match · longer drive advances`})),S.brackets.map(divisionSection));
+    const t=S.ttab||"mp";
+    out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Tracker sections"},[["rr","Round Robin"],["mp","Match Play"]].map(([k,l])=>el("button",{role:"tab","aria-selected":t===k?"true":"false",onclick:()=>{S.ttab=k;schedule();}},l))));
+    out.push(t==="rr"?standings():mpSec());return out;}
+  out.push(standings());
+  if(!ev.seeding)out.push(projectedSection());
+  return out;}
+function projectedSection(){const ev=EV(),rows=ranking();if(!rows.length)return null;const p=project(rows.map(r=>r.h.id),ev.divisions);
+  const tot=rows.length*ev.rrSets,got=rows.reduce((n,r)=>n+r.vals.length,0),done=got>=tot;
+  const rankOf={};rows.forEach(r=>rankOf[r.h.id]=r.rank);const ph=done?null:id=>"Rank #"+rankOf[id];
+  return el("section",{class:"sec"},el("div",{class:"sechead"},el("h2",{text:"Match Play"}),
+      el("span",{class:"chip mark",text:done?"All sets in · locks at match play":`Names fill in when all sets are in · ${got} of ${tot}`})),
+    p.leftover.length&&S.me.isOwner?el("div",{class:"note bad",text:`${p.leftover.length} hitters don't fit any division. Leave one division's size blank in Event Details.`}):null,
+    p.divs.map((d,di)=>{const off=p.divs.slice(0,di).reduce((n,x)=>n+x.seeds.length,0);const rounds=buildBracket({id:d.id,ver:"p",seeds:d.seeds,fill:d.fill});const res=resolveDiv(d,rounds,false);const seedOf=id=>{const i=d.seeds.indexOf(id);return i>=0?off+i+1:""};
+      return el("div",{class:"sec"},el("div",{class:"sechead"},el("h3",{text:d.name}),el("span",{class:"muted small",text:shapeText(d.seeds.length,d.fill)})),
+        rounds.length?el("div",{class:"bracket"},el("div",{class:"rounds"},bracketCols(rounds,m=>matchCard(res[m.id],seedOf,ph),rd=>rd.label)))
+        :el("div",{class:"note",text:d.seeds.length===1?(ph?ph(d.seeds[0]):nameOf(d.seeds[0]))+" is the only hitter in this division.":"No hitters in this division yet."}));}));}
+function standings(){const ev=EV(),rows=ranking(),n=ev.rrSets;
+  const proj=ev.seeding?null:project(rows.map(r=>r.h.id),ev.divisions);
+  const divOf={};(ev.seeding?ev.seeding.divisions:proj.divs).forEach(d=>d.seeds.forEach(id=>divOf[id]=d.name));
+  const starts=new Set();if(proj){let i=0;proj.divs.forEach((d,ix)=>{if(ix>0&&d.seeds.length)starts.add(i);i+=d.seeds.length;});}
+  const head=el("tr",{},el("th",{class:"num",text:"#"}),el("th",{text:"Hitter"}),[...Array(n)].map((_,i)=>el("th",{class:"num",text:"Set "+(i+1)})),el("th",{class:"tbr","aria-label":"Tie groups"}),el("th",{class:"num",text:"Long"}),el("th",{text:"Division"}),S.me.isOwner?el("th",{class:"pencell","aria-label":"Edit"}):null);
+  const body=rows.map((r,i)=>el("tr",{class:starts.has(i)?"cut":null},
+    el("td",{class:"num"},el("span",{class:"rank",text:r.rank})),
+    el("td",{},flc(r.h.country),r.h.name,r.h.site?el("span",{class:"muted small",text:" · "+r.h.site}):null,r.tie?el("span",{class:"chip bad review",text:"Review – no tiebreaker",onclick:()=>toast(`Tied on every set with ${(r.tieWith||[]).join(", ")}. Nothing breaks this tie, so the director needs to decide the order.`)}):null),
+    r.cells.map((c,ci)=>el("td",{class:"num",onclick:c?()=>toast((r.tbCells.has(ci)?"Broke a tie on Long · ":"")+(c.src==="td"?"Set by the director":(c.edited?"Edited ":"Submitted ")+tstr(c.at))):null},c?(r.tbCells.has(ci)?el("span",{class:"tb",text:fmt(c.v)}):fmt(c.v)):el("span",{class:"muted",text:"—"}),c&&c.src==="td"?el("span",{class:"muted small",text:" ✎"}):null)),
+    el("td",{class:"tbr"},r.tg?el("span",{class:"br "+r.tg,"aria-hidden":"true"}):null),
+    el("td",{class:"num long"},r.longTie?el("span",{class:"chip mark",style:"margin-right:6px",text:"tie",onclick:()=>toast(r.tie?"Tied on every set":"Tied on Long · broken by the circled set")}):null,fmt(r.long)),
+    el("td",{},divOf[r.h.id]?el("span",{class:"chip"+(ev.seeding?" on":""),text:divOf[r.h.id]}):el("span",{class:"muted small",text:"—"})),
+    S.me.isOwner?el("td",{class:"pencell"},el("button",{class:"penbtn","aria-label":"Edit "+r.h.name+"'s round robin sets",onclick:()=>{S.sub="rrrow:"+r.h.id;S.focusId="i_rrr_0";schedule();}},pencil(r.cells.some(c=>c&&c.src==="td")))):null));
+  const out=ev.hitters.filter(h=>h.status==="withdrawn").map(h=>el("tr",{class:"out"},el("td",{class:"num",text:"–"}),el("td",{},flc(h.country),h.name),[...Array(n)].map(()=>el("td",{})),el("td",{class:"tbr"}),el("td",{}),el("td",{},el("span",{class:"chip",text:"Withdrawn"})),S.me.isOwner?el("td",{class:"pencell"}):null));
+  return el("section",{class:"sec"},el("div",{class:"sechead"},el("h2",{text:"Round robin standings"}),
+    el("span",{class:"muted small",text:`${n} set${n>1?"s":""} × ${ev.balls} balls · ranked on longest drive, ties broken by next-best set (circled)`})),
+    rows.length||out.length?el("div",{class:"tblwrap"},el("table",{},el("thead",{},head),el("tbody",{},body,out))):el("div",{class:"note",text:"No hitters yet. The director adds them from the Director tab."}),
+    ev.seeding?null:el("p",{class:"muted small",text:"Division bands are projected from current standings. They lock when the director starts match play."}));}
+function tagCard(c,m){if(!c||!c.setAttribute)return c;c.setAttribute("data-mid",m.id);const sl=(c.childNodes||[]).filter?c.childNodes.filter(x=>x.className&&String(x.className).startsWith("slot")):[...c.children].filter(x=>x.className.startsWith("slot"));
+  [m.a,m.b].forEach((r,k)=>{if(r&&r.win&&sl[k])sl[k].setAttribute("data-from",r.win);});return c;}
+function bracketCols(rounds,cardFn0,label,champ){const cardFn=m=>tagCard(cardFn0(m),m);const hasPI=rounds.length>1&&rounds[0].label==="Play-In";
+  const pairsOf=ms=>{const p=[];for(let k=0;k<ms.length;k+=2)p.push(ms.slice(k,k+2));return p;};
+  const cols=rounds.map((rd,ri)=>{const last=ri===rounds.length-1;
+    if(hasPI&&ri===0){const byId=Object.fromEntries(rd.matches.map(m=>[m.id,m]));
+      return el("div",{class:"round pi"},el("div",{class:"rl",text:label(rd)}),el("div",{class:"ms"},pairsOf(rounds[1].matches).map(pr=>el("div",{class:"pair"},pr.map(m1=>{
+        const f=[m1.a,m1.b].map(x=>x&&x.win&&byId[x.win]).filter(Boolean);return el("div",{class:"mw"+(f.length?" feed":"")},f.map(cardFn));})))));}
+    const fedR=hasPI&&ri===1;
+    return el("div",{class:"round"+(ri===0?" nofeed":"")+(fedR?" fedround":"")+(last?" final":"")+(last&&champ?" haschamp":"")},el("div",{class:"rl",text:label(rd)}),last&&champ?champ:null,
+      el("div",{class:"ms"},pairsOf(rd.matches).map(pr=>el("div",{class:"pair"+(pr.length>1?" two":"")},pr.map(m=>el("div",{class:"mw"+(fedR&&[m.a,m.b].some(x=>x&&x.win)?" fed":"")},cardFn(m)))))));});
+  return cols;}
+function divisionSection(b){const {div,rounds,res,champ}=b;
+  const seedOf=id=>{const i=div.seeds.indexOf(id);return i>=0?b.off+i+1:""};
+  const cols=bracketCols(rounds,m=>matchCard(res[m.id],seedOf),rd=>rd.label+" · 1 set × "+EV().mpBalls,champ?el("div",{class:"champ"},el("small",{text:div.name+" winner"}),el("div",{},fl(champ),nameOf(champ))):null);
+  return el("section",{class:"sec"},el("div",{class:"sechead"},el("h3",{text:div.name+" division"}),el("span",{class:"muted small",text:shapeText(div.seeds.length,div.fill)})),
+    rounds.length?el("div",{class:"bracket"},el("div",{class:"rounds"},cols)):el("div",{class:"note",text:div.seeds.length===1?nameOf(div.seeds[0])+" is the only hitter in this division.":"No hitters in this division."}));}
+function matchCard(r,seedOf,ph){if(!r)return el("div",{class:"match"});
+  const both=r.ea?.revealed&&r.eb?.revealed;
+  const slot=(hid,e,src)=>{if(hid===undefined)return el("div",{class:"slot tbd"},el("span",{class:"seed none"}),el("span",{class:"nm",text:src?src+" winner":"Winner advances"}),el("span",{class:"yd"}));
+    if(hid==="BYE")return el("div",{class:"slot tbd"},el("span",{class:"seed none"}),el("span",{class:"nm",text:"Bye"}),el("span",{class:"yd"}));
+    const w=r.winner!==undefined&&r.winner!=="BYE";const cls="slot"+(w&&r.winner===hid?" win":w?" lose":"");
+    let val="";if(hitter(hid)?.status==="withdrawn")val="WD";else if(e&&e.revealed&&(both||r.winner!==undefined))val=fmt(e.v);else if(e&&e.committed)val="locked";
+    return el("div",{class:cls},(sd=>el("span",{class:sd?"seed":"seed none",text:sd}))(seedOf(hid)),ph?el("span",{class:"nm muted",text:ph(hid)}):el("span",{class:"nm"+(S.me.isOwner&&!ph&&hid!=="BYE"?" nmlink":""),onclick:S.me.isOwner&&hitter(hid)?()=>{S.modal="enter:"+hid;S.confirm=null;schedule();}:null},fl(hid),nameOf(hid),r.att>0?el("span",{class:"chip mark tiny",title:r.att>1?`Tied ${r.att} times, rehit`:"Tied, rehit",text:r.att>1?`Tie – rehit ×${r.att}`:"Tie – rehit"}):null),el("span",{class:"yd"+(val==="locked"?" muted small":""),text:val}));};
+  let st=null;
+  const rb=S.me.isOwner&&r.pk?el("button",{class:"primary stbtn",onclick:()=>{S.dtab="flow";S.focusMatch=r.pk;S.focusDone=false;goView("director");}},"Resolve →"):null;
+  if(r.status==="tie")st=el("div",{class:"st mark"},el("span",{text:"Tie · rehit needed"}),rb);
+  else if(r.status==="td")st=el("div",{class:"st",text:"Result set by the director"});
+  else if(r.status==="forfeit")st=el("div",{class:"st",text:"Advanced by withdrawal"});
+  else if(r.status==="live"){if(r.ea.bad||r.eb.bad)st=el("div",{class:"st bad"},el("span",{text:"An entry failed verification"}),rb);
+    else if(r.ea.committed&&r.eb.committed)st=el("div",{class:"st mark",text:"Both locked in · revealing"});
+    else st=el("div",{class:"st",text:r.ea.committed||r.eb.committed?"1 of 2 locked in":"Waiting for entries"});}
+  return el("div",{class:"match"},slot(r.a,r.ea,r.la),slot(r.b,r.eb,r.lb),st);}
+
+/* ---------- ENTER ---------- */
+function vEnter(){const ev=EV(),out=[el("div",{class:"sechead"},el("h2",{text:"Enter scores"}))];
+  const msg=(t)=>{out.push(el("div",{class:"panel"},el("p",{style:"margin:0"},t)));return out;};
+  if(S.noDb)return msg("Couldn't reach LetItFly. Check your connection and reload.");
+  if(!S.me.id||S.needName){out.push(signInBox());return out;}
+  if(S.canWrite===false)return msg("You have view-only access to this event. Ask the director to give you Contributor access so you can enter scores.");
+  if(!ev)return msg("The director hasn't set up this event yet.");
+  const mine=ev.hitters.filter(h=>assigned(S.me.id,h.id)).map(h=>h.id);
+  const meP=S.profiles[S.me.id];out.push(el("div",{class:"row small muted"},"Signed in as ",el("strong",{text:meP?.name||"you"}),meP?.email?" · "+meP.email:""));
+  if(!mine.length){const joined=!!S.joins[S.me.id];
+    out.push(el("div",{class:"panel sec"},el("h3",{text:joined?"Waiting for the director":"Get set up to enter"}),
+      el("p",{class:"muted",style:"margin:0"},joined?"Your request is in. The director will link you to your hitter (or the hitters you're scoring for), then your entry boxes show up here.":"Let the director know you're here. They'll link you to your hitter, or to the group you're scoring for."),
+      joined?null:el("div",{class:"row"},el("button",{class:"primary",disabled:S.busy,onclick:async()=>{S.busy=true;schedule();try{await write("joins/"+S.me.id,{at:Date.now()});S.joins[S.me.id]={at:Date.now()};toast("Request sent");}catch(e){toast("Couldn't send. Check your access.")}S.busy=false;schedule();}},"Request to enter scores"))));
+    return out;}
+  const tip={setup:"Entry opens when the director starts the round robin.",rr:"Tap a hitter to enter their sets.",match:"Tap a hitter to enter. Numbers stay sealed until both hitters lock in.",final:"The event is complete."}[ev.phase];
+  const rows=mine.map(hitter).filter(Boolean).map(h=>({h,sm:enterSummary(h)}));rows.sort((a,b)=>(b.sm.act?1:0)-(a.sm.act?1:0));
+  const todo=rows.filter(r=>r.sm.act).length;
+  out.push(el("div",{class:"sechead"},el("span",{class:"muted small",text:tip}),todo?el("span",{class:"chip mark",text:todo+" to enter"}):null));
+  out.push(el("div",{class:"elist"},rows.map(({h,sm})=>el("button",{class:"erow"+(sm.act?" act":"")+(h.status==="withdrawn"?" out":""),onclick:()=>{S.modal="enter:"+h.id;S.confirm=null;schedule();}},
+    el("span",{class:"rmain"},el("span",{class:"ename"},flc(h.country),el("span",{text:h.name})),el("span",{class:"esub",text:sm.t})),
+    sm.act?el("span",{class:"ecta",text:sm.cta||"Enter"}):el("span",{class:"echev","aria-hidden":"true",text:"›"})))));
+  if(mine.length>1){const sites=[...new Set(mine.map(x=>hitter(x)?.site).filter(Boolean))];if(sites.length)out.push(el("p",{class:"muted small",style:"margin:0",text:`You can enter for everyone at ${sites.join(", ")}. The first number submitted for a hitter counts.`}));}
+  if(S.modal&&S.modal.startsWith("enter:")){const h=hitter(S.modal.slice(6));if(h&&mine.includes(h.id))out.push(enterSheet(h));}
+  return out;}
+function enterSummary(h){const ev=EV();if(h.status==="withdrawn")return{t:"Withdrawn"};
+  const n=[...Array(ev.rrSets)].filter((_,i)=>rrCell(h.id,i)).length,ah=Object.keys(aheadOf(h.id)).length;
+  if(ev.phase==="setup")return{t:"Round robin hasn't started"};
+  if(ev.phase==="rr"){if(n<ev.rrSets)return{t:`Round robin · ${n} of ${ev.rrSets} sets in`,act:true,cta:"Set "+(n+1)};
+    return{t:"Round robin done"+(ah?` · ${ah} match set${ah>1?"s":""} banked`:" · match sets optional")};}
+  if(S.brackets.some(b=>b.champ===h.id))return{t:"Division winner"};
+  const live=Object.values(S.keyIndex).map(x=>x.res).find(r=>(r.a===h.id||r.b===h.id)&&(r.status==="live"||r.status==="tie"));
+  if(live){const opp=nameOf(live.a===h.id?live.b:live.a),e=live.a===h.id?live.ea:live.eb;
+    if(live.status==="tie")return{t:`Tied vs ${opp} · waiting for the rehit`};
+    if(!rrDone(h.id))return{t:"Round robin incomplete · ask the director"};
+    if(!e.committed)return ev.phase==="match"?{t:`${live.round}${live.att?" rehit":""} vs ${opp}`,act:true,cta:"Enter"}:{t:`${live.round} vs ${opp}`};
+    return{t:`${live.round} vs ${opp} · locked in`+((live.a===h.id?live.eb:live.ea).committed?" · revealing":"")};}
+  const lost=S.brackets.some(b=>Object.values(b.res).some(r=>(r.a===h.id||r.b===h.id)&&r.winner!==undefined&&r.winner!=="BYE"&&r.winner!==h.id));
+  return{t:lost?"Eliminated":"Waiting for the next match"+(ah?` · ${ah} match set${ah>1?"s":""} banked`:"")};}
+function enterSheet(h){const close=()=>{S.modal=null;S.confirm=null;schedule();};
+  return el("div",{class:"modal-back sheet-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal sheet panel",role:"dialog","aria-modal":"true","aria-label":"Enter scores for "+h.name},
+      el("div",{class:"sheethead"},el("h2",{},flc(h.country),h.name),el("div",{class:"row"},S.me.isOwner?undoBtn():null,el("button",{class:"ghost","aria-label":"Close",onclick:close},"Done"))),
+      hitterEntry(h)));}
+function confirmBox(text,onyes){return el("div",{class:"confirm"},el("div",{},text),el("div",{class:"row"},
+  el("button",{class:"primary",disabled:S.busy,onclick:onyes},"Confirm"),el("button",{class:"ghost",onclick:()=>{S.confirm=null;schedule()}},"Cancel")));}
+function hitterEntry(h){const ev=EV(),card=el("section",{class:"panel hcard"},el("div",{class:"sechead"},el("h3",{},flc(h.country),h.name),
+  h.status==="withdrawn"?el("span",{class:"chip bad",text:"Withdrawn"}):h.site?el("span",{class:"chip",text:h.site}):null));
+  if(h.status==="withdrawn")return card;
+  if(ev.phase==="rr"){const sets=el("div",{class:"sets"});
+    for(let i=0;i<ev.rrSets;i++){const c=rrCell(h.id,i),k=`rr_${h.id}_${i}`;const box=el("div",{class:"setbox"},el("div",{class:"row sh",style:"justify-content:space-between"},el("strong",{text:"Set "+(i+1)}),el("span",{class:"muted small",text:ev.balls+" balls"})));
+      if(c&&S.editRR===k&&c.src==="entry"){
+        {const input=inp("e"+k,{class:"yds",inputmode:"decimal","aria-label":`Edit set ${i+1}`},String(c.v));
+          box.append(el("div",{class:"row"},input,el("button",{class:"primary",onclick:()=>{const v=parseYds(input.value);if(v==null)return toast("Enter the distance in yards, like 412");if(v===c.v){S.editRR=null;schedule();return;}delete D["e"+k];submitRR(h.id,String(i),v,true);}},"Save"),
+            el("button",{class:"ghost",onclick:()=>{S.editRR=null;delete D["e"+k];schedule();}},"Cancel")));}}
+      else if(c){box.append(el("div",{class:"row",style:"justify-content:space-between"},el("div",{class:"big",text:fmt(c.v)+" yds"}),
+          c.src==="entry"&&ev.phase==="rr"?el("button",{class:"pill",onclick:()=>{S.editRR=k;S.confirm=null;delete D["e"+k];schedule();}},"Edit"):null),
+        el("div",{class:"muted small",text:c.src==="td"?"Set by the director":(c.edited?"Edited ":"Submitted ")+tstr(c.at)}));}
+      else{const input=inp(k,{class:"yds",inputmode:"decimal",placeholder:"yds","aria-label":`Set ${i+1} longest drive`});
+        box.append(el("div",{class:"row"},input,el("button",{class:"primary",disabled:S.busy,onclick:()=>{const v=parseYds(input.value);if(v==null)return toast("Enter the distance in yards, like 412");delete D[k];submitRR(h.id,String(i),v);}},"Submit")));}
+      sets.append(box);}
+    card.append(sets);}
+  else if(ev.phase==="match"||ev.phase==="final"){const cs=[...Array(ev.rrSets)].map((_,i)=>rrCell(h.id,i)),vals=cs.filter(Boolean).map(c=>c.v);
+    card.append(el("div",{class:"setbox rrsum"},el("div",{class:"row sh"},el("strong",{text:"Round robin"}),el("span",{class:"muted small",text:"Long "+fmt(vals.length?Math.max(...vals):null)})),
+      el("div",{class:"row"},el("span",{class:"mono",text:cs.map(c=>c?fmt(c.v):"—").join(" · ")}),S.me.isOwner?el("button",{class:"penbtn","aria-label":"Edit round robin sets",onclick:()=>{S.sub="rrrow:"+h.id;S.focusId="i_rrr_0";schedule();}},pencil(cs.some(c=>c&&c.src==="td"))):null)));}
+  if(ev.phase==="match"||ev.phase==="final"){
+    const lost=S.brackets.some(b=>Object.values(b.res).some(r=>(r.a===h.id||r.b===h.id)&&r.winner!==undefined&&r.winner!=="BYE"&&r.winner!==h.id));
+    const champ=S.brackets.some(b=>b.champ===h.id);
+    if(champ)card.append(el("div",{class:"note",text:"Division winner. Congratulations!"}));else if(lost)card.append(el("div",{class:"note",text:"Eliminated. Your match history is below."}));}
+  if(ev.phase!=="setup")card.append(matchSetsBox(h));
+  return card;}
+function mpImpact(r,hid,v,oe){const opp=r.a===hid?r.b:r.a,ov=oe&&oe.revealed?oe.v:null,cur=r.winner;if(ov==null||!cur||cur==="BYE")return false;
+  const nw=v>ov?hid:v<ov?opp:null;if(nw===cur)return false;const ri=x=>+String(x.id).split(":")[2];
+  for(const b of S.brackets)for(const x of Object.values(b.res)){if(x.id===r.id||ri(x)<=ri(r))continue;if((x.a===cur||x.b===cur)&&((x.ea&&x.ea.committed)||(x.eb&&x.eb.committed)||S.admin?.mpWinner?.[x.pk]))return true;}
+  return false;}
+function applyMP(key,hid,v,r,label,old){S.mpEdit=null;S.warn=null;numChange([Object.assign({t:"mp",key,hid,v},r.pk?{pk:r.pk,w:null}:{})],
+  `Match play: ${nameOf(hid)} ${label} (${r.dn||""} ${r.round}) → ${fmt(v)}${old!=null?` (was ${fmt(old)})`:""}`);}
+function warnModal(){const w=S.warn,close=()=>{S.warn=null;schedule();};
+  return el("div",{class:"modal-back warnback",onclick:e=>{if(e.target===e.currentTarget)close()}},el("div",{class:"modal panel sec",role:"alertdialog","aria-modal":"true",style:"max-width:420px"},
+    el("h2",{text:"Change the result?"}),el("p",{style:"margin:0"},w.text),
+    el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),el("button",{class:"danger solidbtn",onclick:()=>{const g=w.go;S.warn=null;g();}},"Continue"))));}
+function aheadMaxFor(hid){const b=S.brackets.find(x=>x.div.seeds.includes(hid));if(b)return b.rounds.length;
+  const ev=EV(),p=project(ranking().map(r=>r.h.id),ev.divisions);
+  return Math.max(1,...p.divs.map(d=>buildBracket({id:d.id,ver:"p",seeds:d.seeds,fill:d.fill}).length));}
+const rrDone=hid=>[...Array(EV().rrSets)].every((_,i)=>rrCell(hid,i));
+function matchSetsBox(h){const ev=EV(),hid=h.id,rd=rrDone(h.id),V=S.vault[S.me.id],depth=aheadMaxFor(hid),ahead=aheadOf(hid);
+  const lost=S.brackets.some(b=>Object.values(b.res).some(r=>(r.a===hid||r.b===hid)&&r.winner!==undefined&&r.winner!=="BYE"&&r.winner!==hid));
+  const champ=S.brackets.some(b=>b.champ===hid),open=!lost&&!champ&&ev.phase!=="final";
+  const byIdx={};for(const b of S.brackets)for(const r of Object.values(b.res)){if(r.ia==null)continue;if(r.a===hid)byIdx[r.ia]=r;else if(r.b===hid)byIdx[r.ib]=r;}
+  const played=Object.keys(byIdx).map(Number),lastPlayed=played.length?Math.max(...played):-1;
+  const aheadIdx=Object.keys(ahead).map(Number),lastAhead=aheadIdx.length?Math.max(...aheadIdx):-1;
+  S.aheadSlots=S.aheadSlots||{};
+  const slots=open?Math.max(3,lastPlayed+1,lastAhead+1,S.aheadSlots[hid]||0):lastPlayed+1;
+  let nextFuture=-1;for(let x=lastPlayed+1;x<slots;x++)if(!ahead[x]){nextFuture=x;break;}
+  const myVal=(e,key,k)=>{if(e.src==="td")return e.v;const W=(e.uid&&S.vault[e.uid])||V;return e.ahead!=null?W?.ahead?.[nk(hid)]?.[k]?.v:W?.m?.[key]?.[hid]?.v;};
+  const grid=el("div",{class:"sets"});
+  const inputBox=(ck,label,confirmText,go)=>{if(S.confirm&&S.confirm.k===ck)return confirmBox(confirmText(S.confirm.v),()=>go(S.confirm.v));
+    const input=inp(ck,{class:"yds",inputmode:"decimal",placeholder:"yds","aria-label":label});
+    return el("div",{class:"row"},input,el("button",{class:"primary",onclick:()=>{const v=parseYds(input.value);if(v==null)return toast("Enter the distance in yards, like 412");S.confirm={k:ck,v};schedule();}},"Lock in"));};
+  for(let k=0;k<slots;k++){const r=byIdx[k];
+    if(r){const opp=r.a===hid?r.b:r.a,oIdx=r.a===hid?r.ib:r.ia;
+      for(let a=0;a<=r.att;a++){const key=EK()+r.pk+"#"+a,label="Match play – Set "+(k+1)+(a?" rehit"+(a>1?" "+a:""):"");
+        const e=a===r.att?(r.a===hid?r.ea:r.eb):entryFor(key,hid,a?null:k),oe=a===r.att?(r.a===hid?r.eb:r.ea):entryFor(key,opp,a?null:oIdx);
+        const b=el("div",{class:"setbox"+(a?" rehit":"")},el("div",{class:"row sh",style:"justify-content:space-between"},el("strong",{text:label}),el("span",{class:"muted small",text:r.round})));
+        const vs="vs "+nameOf(opp);
+        const ek=key+"|"+hid;
+        if(e.committed&&S.me.isOwner&&S.mpEdit===ek){const mv=myVal(e,key,k);
+          if(S.confirm&&S.confirm.k==="ov"+ek)b.append(confirmBox(`Change ${h.name}'s ${label} to ${fmt(S.confirm.v)} yds?`,()=>{const v=S.confirm.v;S.confirm=null;applyMP(key,hid,v,r,label,mv);}));
+          else{const input=inp("ov_"+ek,{class:"yds",inputmode:"decimal","aria-label":"Override "+label},mv!=null?String(mv):"");
+            b.append(el("div",{class:"row"},input,el("button",{class:"primary",onclick:()=>{const v=parseYds(input.value);if(v==null)return toast("Enter the distance in yards, like 412");if(v===mv){S.mpEdit=null;schedule();return;}
+              const impact=mpImpact(r,hid,v,oe);if(impact){S.warn={text:"Changing this number changes who won this match. Later rounds that already have entries will be rebuilt, and those entries may be lost. Do you still want to continue?",go:()=>applyMP(key,hid,v,r,label,mv)};schedule();}
+              else{S.confirm={k:"ov"+ek,v};schedule();}}},"Save"),el("button",{class:"ghost",onclick:()=>{S.mpEdit=null;S.confirm=null;schedule();}},"Cancel")));
+            if(e.src==="td")b.append(el("button",{class:"pill",onclick:()=>{S.mpEdit=null;numChange([{t:"mp",key,hid,v:null}],`Match play: removed director value for ${h.name}, ${label}`);}},"Use hitter's entry"));}}
+        else if(e.committed){const mv=myVal(e,key,k);b.append(el("div",{class:"row"},el("div",{class:"big",text:mv!=null?fmt(mv)+" yds":e.revealed?fmt(e.v)+" yds":"Sealed"}),
+            S.me.isOwner&&ev.phase!=="setup"?el("button",{class:"penbtn","aria-label":"Override "+label,onclick:()=>{S.mpEdit=ek;S.confirm=null;delete D["ov_"+ek];schedule();}},pencil(e.src==="td")):null));
+          if(e.ahead!=null)b.append(el("span",{class:"chip mark",text:"Hit ahead"}));if(e.src==="td")b.append(el("span",{class:"chip",text:"Director value"}));}
+        let line;
+        if(a<r.att)line=`Tied ${vs}`+(e.revealed&&oe.revealed?` · ${fmt(e.v)} – ${fmt(oe.v)}`:"")+" · rehit below";
+        else if(r.status==="tie")line=`Tied ${vs}`+(e.revealed&&oe.revealed?` · ${fmt(e.v)} – ${fmt(oe.v)}`:"")+" · waiting for the director to open a rehit";
+        else if(r.status==="done"||r.status==="td")line=(r.winner===hid?"Won ":"Lost ")+vs+(e.revealed&&oe.revealed?` · ${fmt(e.v)} – ${fmt(oe.v)}`:r.status==="td"?" · director call":"");
+        else if(e.committed)line=oe.committed?"Both locked in · revealing":`Sealed until ${nameOf(opp)} locks in`;
+        else line=`${vs} · ${oe.committed?nameOf(opp)+" has locked in":nameOf(opp)+" hasn't locked in yet"}`;
+        if(!e.committed&&a===r.att&&r.status==="live"&&ev.phase==="match"&&rd)b.append(inputBox("mp_"+key+"_"+hid,label,v=>`Lock in ${fmt(v)} yds for ${h.name}, ${label}? It stays sealed until ${nameOf(opp)} locks in, and it can't be changed.`,v=>lockMatch(key,hid,v)));
+        b.append(el("div",{class:"muted small",text:line}));grid.append(b);}
+      continue;}
+    const label="Match play – Set "+(k+1),b=el("div",{class:"setbox"},el("div",{class:"row sh",style:"justify-content:space-between"},el("strong",{text:label}),el("span",{class:"muted small",text:"hit ahead"})));
+    if(ahead[k]){const mv=V?.ahead?.[nk(hid)]?.[k]?.v;b.append(el("div",{class:"big",text:mv!=null?fmt(mv)+" yds":"Sealed"}),el("div",{class:"muted small",text:"Locked "+tstr(ahead[k].c.at)+" · used for your next match"}));}
+    else if(k===nextFuture&&open&&rd)b.append(inputBox("ah_"+hid+"_"+k,label,v=>`Lock in ${fmt(v)} yds as ${label} for ${h.name}? It stays sealed and can't be changed.`,v=>lockAhead(hid,String(k),v)));
+    else b.append(el("div",{class:"row"},el("input",{class:"yds",disabled:true,placeholder:"yds","aria-label":label}),el("button",{disabled:true},"Lock in")),el("div",{class:"muted small",text:!rd?`Finish all ${ev.rrSets} round robin sets first`:`Lock in set ${k} first`}));
+    grid.append(b);}
+  const filled=k=>{if(ahead[k])return true;const r=byIdx[k];if(!r)return false;return!!(r.a===hid?r.ea:r.eb)?.committed;};
+  if(open&&slots>0&&filled(slots-1))grid.append(el("button",{class:"setbox addset","aria-label":"Add another match play set",onclick:()=>{S.aheadSlots[hid]=slots+1;schedule();}},el("span",{class:"plus",text:"+"}),el("span",{class:"small",text:"Add set "+(slots+1)})));
+  if(!grid.childNodes.length)return el("div");
+  return el("div",{class:"sec",style:"border-top:1px solid var(--line);padding-top:12px"},
+    el("div",{class:"sechead"},el("strong",{text:"Match play"}),el("span",{class:"muted small",text:`1 set × ${ev.mpBalls} balls each`})),
+    open&&!rd?el("div",{class:"note warn small",text:`Match play sets open once all ${ev.rrSets} round robin sets are in.`+(ev.phase==="rr"?"":" Ask the director if one is missing.")}):null,
+    ev.phase==="rr"&&open?el("p",{class:"muted small",style:"margin:0"},"Leaving before match play? Hit your sets now. Set 1 counts for your first match, set 2 if you advance, and so on. Each stays sealed until that opponent locks in."):null,
+    grid);}
+
+/* ---------- DIRECTOR ---------- */
+function vDirector(){if(!S.noDb&&!S.me.isOwner)return [el("div",{class:"panel"},"Only the event owner can use the director tools.")];
+  const out=[];
+  if(S.noDb){out.push(el("div",{class:"note warn"},"Preview only. Director tools save to the live event on the published page. The field-size tester below works here."));out.push(testerSection());return out;}
+  if(!S.loaded){out.push(el("div",{class:"panel"},"Loading event data…"));return out;}
+  if(!EV()){out.push(el("section",{class:"panel sec"},el("h2",{text:"Create the event"}),el("p",{class:"muted",style:"margin:0"},"Starts with your usual format: 3 sets × 6 balls, then Champions (10), Competitors (8) and Contender (everyone left), each with play-ins. You can change all of it."),
+    el("div",{class:"row"},el("button",{class:"primary",onclick:()=>saveEvent(()=>{},"Created the event")},"Create event"))));out.push(importCard());out.push(testerSection());return out;}
+  const ev=EV(),live=(ev.phase==="match"||ev.phase==="final")&&!!ev.seeding;
+  const subs=[["settings","Details"],["hitters","Hitters"],["flow","Event Flow"],["seeds","Seeds"]],tops=[["event","Event Details"],["log","Log"],["library","Hitter Library"],["facilities","Facility Library"]];
+  const t=[...subs,["log"],["library"],["facilities"]].some(x=>x[0]===S.dtab)?S.dtab:ev.phase==="setup"?"settings":"flow",inEv=subs.some(x=>x[0]===t);
+  if(inEv)S.lastSub=t;
+  const go=k=>{S.dtab=k==="event"?(S.lastSub||(ev.phase==="setup"?"settings":"flow")):k;S.confirm=null;schedule();};
+  out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Director sections"},tops.map(([k,l])=>el("button",{role:"tab","aria-selected":(k==="event"?inEv:t===k)?"true":"false",onclick:()=>go(k)},l))));
+  if(inEv)out.push(el("div",{class:"subtabs",role:"tablist","aria-label":"Event sections"},subs.map(([k,l])=>el("button",{role:"tab","aria-selected":t===k?"true":"false",onclick:()=>{S.dtab=k;S.confirm=null;schedule();}},l))));
+  if(t==="flow")out.push(...[phaseSection(),live?matchControl():null,ev.phase==="setup"?el("div",{class:"note",text:"Set the format in Details, add hitters and link logins in Hitters, then start the round robin here."}):correctionsSection()].filter(Boolean));
+  if(t==="seeds")out.push(live?seedEditor():seedPreview());
+  if(t==="hitters")out.push(rosterSection(),scorersSection());
+  if(t==="settings"){const [det,dv]=settingsSection();out.push(det,dv,setupHittersCard());}
+  if(t==="log")out.push(logSection());
+  if(t==="library")out.push(...librarySection());
+  if(t==="facilities")out.push(...facilitySection());
+  if(S.modal&&S.modal.startsWith("perm:"))out.push(permModal(S.modal.slice(5)));
+  else if(S.modal&&S.modal.startsWith("arch:")&&libH(S.modal.slice(5)))out.push(archiveModal(S.modal.slice(5)));
+  else if(S.modal&&S.modal.startsWith("del:")&&hitter(S.modal.slice(4))&&!rosterLocked())out.push(deleteModal(S.modal.slice(4)));
+  else if(S.modal==="pick")out.push(pickerModal());
+  else if(S.modal==="addFac")out.push(facilityModal(null));
+  else if(S.modal&&S.modal.startsWith("fac:")&&S.lib?.facilities?.[S.modal.slice(4)])out.push(facilityModal(S.modal.slice(4)));
+  else if(S.modal&&S.modal.startsWith("facarch:")&&S.lib?.facilities?.[S.modal.slice(8)])out.push(facArchiveModal(S.modal.slice(8)));
+  else if(S.modal==="addHitters")out.push(hitterModal(null));
+  else if(S.modal&&S.modal.startsWith("hitter:")&&(hitter(S.modal.slice(7))||libH(S.modal.slice(7))))out.push(hitterModal(S.modal.slice(7)));
+  return out;}
+function phaseSection(){const ev=EV(),ph=["setup","rr","match","final"],ix=ph.indexOf(ev.phase);
+  const s=el("section",{class:"panel sec"},el("h2",{text:"Event flow"}),progressTracker());
+  const c=S.confirm&&S.confirm.k==="phase"?S.confirm:null;
+  if(c){s.append(confirmBox(c.text,c.go));return s;}
+  const ask=(text,go)=>()=>{S.confirm={k:"phase",text,go:async()=>{S.confirm=null;await go();}};schedule();};
+  const rows=ranking(),p=project(rows.map(r=>r.h.id),ev.divisions);
+  const btns=el("div",{class:"row"});
+  if(ev.phase==="setup")btns.append(el("button",{class:"primary",onclick:()=>saveEvent(e=>e.phase="rr","Started the round robin")},"Start round robin"));
+  if(ev.phase==="rr"){const missing=rows.filter(r=>r.vals.length<ev.rrSets).length;
+    s.append(el("div",{class:"small"},el("strong",{text:"If you lock now: "}),p.divs.map(d=>`${d.name} ${d.seeds.length}`).join(" · "),
+      missing?el("span",{class:"muted",text:` · ${missing} missing a set`}):null,
+      (n=>n?el("div",{style:"color:var(--bad);font-weight:600",text:`${n} hitter${n>1?"s":""} tied on every set: ${rows.filter(r=>r.tie).map(r=>r.h.name).join(", ")}. Review before locking.`}):null)(rows.filter(r=>r.tie).length),
+      p.leftover.length?el("div",{style:"color:var(--bad)",text:`${p.leftover.length} don't fit any division. Leave one division's size blank.`}):null));
+    btns.append(el("button",{class:"primary",onclick:ask("Lock divisions from the current standings and start match play? Round robin entry closes.",async()=>{await saveEvent(e=>{e.seeding=newSeeding();e.phase="match";},"Locked divisions and started match play");})},"Lock divisions and start match play"));
+    if(ev.prevSeeding)btns.append(el("button",{onclick:ask("Restore the brackets exactly as they were before you returned to the round robin? Saved match entries come back with them.",()=>saveEvent(e=>{e.seeding=e.prevSeeding;e.prevSeeding=null;e.phase="match";},"Restored the previous brackets"))},"Restore previous brackets"));
+    btns.append(el("button",{class:"ghost",onclick:()=>saveEvent(e=>e.phase="setup","Moved back to setup")},"Back to setup"));}
+  if(ev.phase==="match"){const keep=" Match entries stay saved and refill any matchup that is the same in the new brackets.";
+    btns.append(el("button",{class:"primary",onclick:ask("Mark the event complete? Brackets stay visible.",()=>saveEvent(e=>e.phase="final","Marked the event complete"))},"Mark complete"),
+    el("button",{onclick:ask("Re-seed every division from the current standings?"+keep,()=>saveEvent(e=>{e.prevSeeding=e.seeding;e.seeding=newSeeding();},"Re-seeded all divisions from standings"))},"Re-seed all"),
+    el("button",{class:"ghost",onclick:ask("Return to the round robin? Brackets come off the tracker. You can restore them as they were, or lock new ones."+keep,()=>saveEvent(e=>{e.prevSeeding=e.seeding;e.seeding=null;e.phase="rr"},"Returned to the round robin"))},"Back to round robin"));}
+  if(ev.phase==="match"&&ev.prevSeeding)btns.append(el("button",{class:"ghost",onclick:ask("Put back the brackets from before the last re-seed?",()=>saveEvent(e=>{const t=e.seeding;e.seeding=e.prevSeeding;e.prevSeeding=t;},"Undid the last re-seed"))},"Undo re-seed"));
+  btns.append(el("button",{class:"ghost",onclick:ask(ev.phase==="final"?"Start a new event? This one is saved to your archive. Format and divisions carry over, the roster starts empty, and your Hitter Library stays as is.":"Start a new event now? This event isn't marked complete. It's saved to your archive as it stands, and the new event starts with an empty roster.",startNewEvent)},"Start new event"));
+  if(ev.phase==="final")btns.append(el("button",{onclick:()=>saveEvent(e=>e.phase="match","Reopened match play")},"Reopen match play"));
+  s.append(btns);return s;}
+function progressTracker(){const ev=EV(),ph=["setup","rr","match","final"],ix=Math.max(0,ph.indexOf(ev.phase));
+  const act=ev.hitters.filter(h=>h.status!=="withdrawn"),rrTot=act.length*ev.rrSets;let rrIn=0;
+  act.forEach(h=>{for(let i=0;i<ev.rrSets;i++)if(rrCell(h.id,i))rrIn++;});
+  let mTot=0,mDone=0;for(const b of S.brackets)for(const r of Object.values(b.res)){if(r.status==="bye"||r.status==="void")continue;mTot++;if(r.winner!==undefined)mDone++;}
+  const frac=ev.phase==="rr"?(rrTot?rrIn/rrTot:0):ev.phase==="match"?(mTot?mDone/mTot:0):0;
+  const pct=ix>=3?100:Math.min(100,(ix+frac)/3*100);
+  const champs=S.brackets.filter(b=>b.champ).length;
+  const caps=[`${act.length} hitter${act.length===1?"":"s"}`,ix<1?`${ev.rrSets} sets × ${ev.balls} balls`:`${rrIn} of ${rrTot} sets in`,ix<2?`${ev.divisions.length} divisions`:`${mDone} of ${mTot} matches`,ix>=3?`${champs} winner${champs===1?"":"s"} crowned`:"Winners crowned"];
+  const labels=["Setup","Round robin","Match play","Complete"];
+  return el("div",{class:"track",style:`--pct:${pct.toFixed(1)}%`,role:"progressbar","aria-valuemin":"0","aria-valuemax":"100","aria-valuenow":String(Math.round(pct)),"aria-label":"Event progress"},
+    el("div",{class:"rail"},el("div",{class:"fill"})),
+    el("ol",{class:"steps"},labels.map((l,i)=>el("li",{class:"step"+(i<ix||ix===3?" done":i===ix?" now":"")},
+      el("span",{class:"dot","aria-hidden":"true"},i<ix||ix===3?"✓":i===ix?"":String(i+1)),
+      el("strong",{text:l}),el("span",{class:"cap",text:caps[i]})))));}
+function linkedTo(hid){const out=[];for(const [u,a] of Object.entries(EV()?.assign||{}))if(idOf(a)===hid)out.push(u);return out;}
+function hittersAt(site){return(EV()?.hitters||[]).filter(h=>h.site===site);}
+const emailOf=hid=>S.lib?.hitters?.[hid]?.email||S.priv?.emails?.[hid]||"";
+const validEmail=e=>!e||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+async function savePriv(mut){const p=clone(S.priv)||{};p.emails=p.emails||{};mut(p);S.priv=p;schedule();
+  try{await write("private/hitters",p);}catch(e){toast("Couldn't save the email: "+(e?.message||e?.code||"error"));}}
+function siteSelect(id,value,onchange,label){const locs=facList().filter(f=>!f.archived).map(f=>f.label);if(value&&!locs.includes(value))locs.push(value);
+  return el("select",{id,"aria-label":label||"Facility",value:value||"",onchange},el("option",{value:""},locs.length?"Facility…":"No facilities yet"),locs.map(l=>el("option",{value:l},l)));}
+function setupHittersCard(){const ev=EV(),act=ev.hitters.filter(h=>h.status!=="withdrawn");
+  const nLinked=act.filter(h=>linkedTo(h.id).length).length,nLib=Object.keys(S.lib?.hitters||{}).length;
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Set Up Hitters"}),el("span",{class:"chip on",text:act.length+" in this event"})),
+    el("p",{class:"muted small",style:"margin:0"},act.length?`${nLinked} of ${act.length} linked to a login. ${nLib} hitters in your library.`:`Pick this event's hitters from your library (${nLib} hitters), or add new ones.`),
+    act.length?el("div",{class:"shlist"},act.map(h=>el("div",{class:"shrow"},el("span",{class:"ename"},flc(h.country),el("span",{text:h.name})),el("span",{class:"esub",text:(h.site||"No facility")+(linkedTo(h.id).length?" · ✓ login":"")})))):null,
+    el("div",{class:"row"},el("button",{class:"primary",onclick:openPicker},"Add Hitters"),
+      el("button",{class:"ghost",onclick:()=>{S.dtab="hitters";schedule();scrollTo(0,0);}},"Manage roster →")));}
+function openPicker(){S.modal="pick";S.pickSel=new Set();S.focusId="i_pk_q";schedule();}
+function openHitter(hid,toEvent){S.modal=hid?"hitter:"+hid:"addHitters";S.addToEvent=!!toEvent;S.focusId="i_hm_name_"+(hid||"new");schedule();}
+const libH=id=>S.lib?.hitters?.[id]||null;
+const rosterLocked=()=>["match","final"].includes(EV()?.phase);
+const LOCKMSG="The roster is locked once match play starts. Use Match control in Event Flow to move a match along.";
+const inEvent=id=>!!(EV()?.hitters||[]).find(h=>h.id===id);
+async function saveLib(mut,log){const l=clone(S.lib)||{};l.hitters=l.hitters||{};mut(l);S.lib=l;schedule();
+  try{await write("private/library",l);if(log)await addLog(log);}catch(e){toast("Couldn't save the library: "+(e?.message||e?.code||"error"));}}
+function addToEvent(ids){const ev=EV(),add=ids.filter(id=>libH(id)&&!inEvent(id));if(!add.length)return;
+  return saveEvent(e=>add.forEach(id=>{const L=libH(id);e.hitters.push({id,name:L.name,country:L.country||"",site:L.site||"",status:"active",addedAt:Date.now()});
+}),`Added to this event: ${add.map(id=>libH(id).name).join(", ")}`);}
+function hitterModal(hid){const ev=EV(),L=hid?(libH(hid)||hitter(hid)):null,eh=hid?hitter(hid):null,isNew=!L,k=hid||"new",close=()=>{S.modal=null;schedule();};
+  const dk=f=>"hm_"+f+"_"+k;
+  const name=inp(dk("name"),{placeholder:"Full name","aria-label":"Name",autocomplete:"off"},L?.name||"");
+  const email=inp(dk("email"),{type:"email",placeholder:"name@email.com","aria-label":"Email",autocomplete:"off"},isNew?"":emailOf(hid));
+  const cKey=dk("c"),sKey=dk("s");
+  const cVal=cKey in D?D[cKey]:isNew?(D.lastCountry||""):(L.country||""),sVal=sKey in D?D[sKey]:isNew?(D.lastSite||""):(L.site||"");
+  const ctry=countrySelect("i_"+cKey,cVal,e=>{D[cKey]=e.target.value}),site=siteSelect("i_"+sKey,sVal,e=>{D[sKey]=e.target.value});
+  const clearD=()=>{["name","email","c","s"].forEach(f=>delete D[dk(f)]);};
+  const save=async(another)=>{const n=name.value.trim(),em=email.value.trim().toLowerCase(),c=cKey in D?D[cKey]:cVal,st=sKey in D?D[sKey]:sVal;
+    if(!n)return toast("Enter a name");if(!validEmail(em))return toast("That email doesn't look right");
+    if(em){const dup=Object.entries(S.lib?.hitters||{}).find(([x,v])=>v.email===em&&x!==hid);if(dup)return toast(`That email is already on ${dup[1].name}`);}
+    if(isNew){const id=rid("h");D.lastCountry=c;D.lastSite=st;clearD();if(another===true){S.focusId="i_hm_name_new";schedule();}else close();
+      await saveLib(l=>l.hitters[id]={name:n,country:c,site:st,email:em,addedAt:Date.now()},"Added to library: "+n);
+      if(S.addToEvent)await addToEvent([id]);toast(S.addToEvent?`Added ${n} to the library and this event`:`Added ${n} to the library`);}
+    else{const ch=[];if(n!==L.name)ch.push("name");if(c!==(L.country||""))ch.push("country");if(st!==(L.site||""))ch.push("facility");if(em!==emailOf(hid))ch.push("email");
+      if(ch.length){await saveLib(l=>{l.hitters[hid]=Object.assign({},l.hitters[hid]||{addedAt:Date.now()},{name:n,country:c,site:st,email:em});},`Updated ${n}: ${ch.join(", ")}`);
+        if(eh&&ch.some(x=>x!=="email"))await saveEvent(e=>{const x=e.hitters.find(y=>y.id===hid);x.name=n;x.country=c;x.site=st;});}
+      clearD();close();}};
+  const logins=eh?linkedTo(hid):[];
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"mh"},
+      el("div",{class:"sechead"},el("h2",{id:"mh"},isNew?"Add hitter":[flc(L.country),L.name]),
+        eh?el("span",{class:"chip"+(eh.status==="withdrawn"?" bad":" on"),text:eh.status==="withdrawn"?"Withdrawn":"In this event"}):!isNew?el("span",{class:"chip",text:"Library only"}):el("button",{class:"ghost","aria-label":"Close",style:"padding:4px 10px",onclick:()=>{clearD();close();}},"✕")),
+      el("form",{class:"pform",onsubmit:e=>{e.preventDefault();save()}},
+        el("label",{class:"f wide"},"Name",name),el("label",{class:"f wide"},"Email (used to match their sign-in)",email),
+        el("label",{class:"f"},"Country",ctry),el("label",{class:"f"},"Facility",site),
+        el("button",{type:"submit",hidden:true,tabindex:"-1","aria-hidden":"true"})),
+      !facList().some(f=>!f.archived)?el("div",{class:"note small",text:"Add facilities in the Facility Library to pick them here."}):null,
+      eh?el("div",{class:"note small"},el("strong",{text:"Login: "}),logins.length?logins.map(pname).join(", "):"Not linked yet"):null,
+      el("div",{class:"row",style:"justify-content:space-between"},
+        eh?(eh.status==="withdrawn"?el("button",{class:"pill",lockReason:rosterLocked()?LOCKMSG:null,onclick:()=>saveEvent(e=>e.hitters.find(x=>x.id===hid).status="active","Reinstated "+eh.name)},"Reinstate")
+          :el("button",{class:"pill danger",lockReason:rosterLocked()?LOCKMSG:null,onclick:()=>saveEvent(e=>e.hitters.find(x=>x.id===hid).status="withdrawn","Withdrew "+eh.name)},"Withdraw")):el("span"),
+        isNew?el("div",{class:"row"},el("button",{class:"ghost",onclick:()=>save(true)},"Save & add another"),el("button",{class:"primary",onclick:()=>save()},"Save"))
+          :el("div",{class:"row"},el("button",{class:"primary",onclick:save},"Save"),el("button",{class:"ghost",onclick:()=>{clearD();close();}},"Cancel")))));}
+function libRows(ids,acts){return ids.length?ids.map(id=>{const L=libH(id)||hitter(id),eh=hitter(id),em=emailOf(id);
+  return el("div",{class:"rrow"+(eh&&eh.status==="withdrawn"?" out":"")},
+    el("div",{class:"rmain"},el("button",{class:"rname",onclick:()=>openHitter(id),title:"Open profile"},flc(L.country),el("span",{text:L.name})),
+      el("div",{class:"rsub"},el("span",{text:(eh?eh.site:L.site)||"No facility"}),el("span",{class:"rem",text:em||"No email",title:em||""}),...acts.sub(id))),
+    el("div",{class:"racts"},...acts.btns(id)));}):[el("div",{class:"muted li",text:acts.empty})];}
+function rosterSection(){const ev=EV(),act=ev.hitters.filter(h=>h.status!=="withdrawn").length,f=S.rosterLoc||"";
+  const ids=ev.hitters.filter(h=>!f||h.site===f).map(h=>h.id),hasEntries=id=>!!Object.keys(aheadOf(id)).length||[...Array(ev.rrSets)].some((_,i)=>rrCell(id,i));
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"This event's roster"}),el("div",{class:"row"},el("span",{class:"chip on",text:act+" active"}),el("button",{class:"primary",onclick:openPicker},"Add Hitters"))),
+    el("p",{class:"muted small",style:"margin:0"},"This roster decides who can score for this event. Edit a profile once and it updates in your library too."),
+    evFacilities().length>1?el("div",{class:"subnav",style:"gap:6px"},[["","All"]].concat(evFacilities().map(l=>[l,l])).map(([v,l])=>el("button",{"aria-selected":f===v?"true":"false",style:"padding:5px 12px;font-size:12px",onclick:()=>{S.rosterLoc=v;schedule();}},l+(v?` (${hittersAt(v).length})`:"")))):null,
+    rosterLocked()?el("div",{class:"note small"},"Roster is locked for match play, so Withdraw and Delete are off. To move a match along, use Match control in Event Flow."):null,
+    el("div",{class:"roster"},libRows(ids,{empty:"No hitters in this event yet. Tap Add Hitters to pick from your library.",
+      sub:id=>{const lk=linkedTo(id).length,ah=Object.keys(aheadOf(id)).length;return[el("span",{class:lk?"ok":"",text:lk?"✓ Login linked":"No login"}),ah?el("span",{text:ah+" MP set"+(ah>1?"s":"")+" banked"}):null];},
+      btns:id=>{const eh=hitter(id),wd=eh.status==="withdrawn",lk=rosterLocked(),tip=lk?LOCKMSG:null;
+        return[wd?el("span",{class:"chip bad",text:"Withdrawn"}):null,el("button",{class:"pill",onclick:()=>openHitter(id)},"Edit"),
+          wd?el("button",{class:"pill",lockReason:tip,onclick:()=>saveEvent(e=>e.hitters.find(x=>x.id===id).status="active","Reinstated "+eh.name)},"Reinstate")
+          :el("button",{class:"pill",lockReason:tip,onclick:()=>saveEvent(e=>e.hitters.find(x=>x.id===id).status="withdrawn","Withdrew "+eh.name)},"Withdraw"),
+          el("button",{class:"pill danger",lockReason:lk?LOCKMSG:null,onclick:()=>{S.modal="del:"+id;schedule();}},"Delete")];}})));}
+function deleteModal(id){const eh=hitter(id),close=()=>{S.modal=null;schedule();};const has=[...Array(EV().rrSets)].some((_,i)=>rrCell(id,i))||Object.keys(aheadOf(id)).length>0;
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"alertdialog","aria-modal":"true","aria-labelledby":"dh",style:"max-width:420px"},
+      el("h2",{id:"dh"},"Delete ",flc(eh.country),eh.name,"?"),
+      el("p",{style:"margin:0"},"This removes them from this event and unlinks their login. They stay in your Hitter Library, so you can add them back later."),
+      has?el("div",{class:"note warn small",text:"They already have numbers entered for this event. Those won't count unless you add them back."}):null,
+      el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),
+        el("button",{class:"danger solidbtn",onclick:()=>{close();saveEvent(e=>{e.hitters=e.hitters.filter(x=>x.id!==id);for(const u in e.assign||{})e.assign[u]=e.assign[u].filter(x=>x!==id&&x!=="for:"+id);},"Deleted from this event: "+eh.name);toast("Deleted "+eh.name+" from this event");}},"Delete"))));}
+function pickerModal(){const ev=EV(),q=(D.pk_q||"").toLowerCase(),loc=D.pk_loc||"",sel=S.pickSel||(S.pickSel=new Set()),close=()=>{S.modal=null;schedule();};
+  const all=Object.entries(S.lib?.hitters||{}).filter(([id,L])=>!inEvent(id)&&!L.archived).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  const shown=all.filter(([id,L])=>(!loc||L.site===loc)&&(!q||L.name.toLowerCase().includes(q)||(L.email||"").includes(q)));
+  const locs=[...new Set(Object.values(S.lib?.hitters||{}).map(L=>L.site).filter(Boolean))].sort();
+  const search=el("input",{id:"i_pk_q",type:"search",placeholder:"Search name or email",value:D.pk_q||"","aria-label":"Search library",oninput:e=>{D.pk_q=e.target.value;schedule();}});
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"pkh",style:"max-width:560px"},
+      el("div",{class:"sechead"},el("h2",{id:"pkh",text:"Add hitters to this event"}),el("span",{class:"chip",text:all.length+" in library"})),
+      el("div",{class:"row"},search,el("select",{id:"i_pk_loc","aria-label":"Facility",value:loc,onchange:e=>{D.pk_loc=e.target.value;schedule();}},el("option",{value:""},"All facilities"),locs.map(l=>el("option",{value:l},l)))),
+      el("div",{class:"pick"},shown.length?shown.map(([id,L])=>el("label",{class:"pickrow"},
+          el("input",{type:"checkbox",checked:sel.has(id),onchange:e=>{e.target.checked?sel.add(id):sel.delete(id);schedule();}}),
+          el("span",{class:"rmain"},el("span",{class:"rname",style:"cursor:pointer"},flc(L.country),el("span",{text:L.name})),el("span",{class:"rsub"},el("span",{text:L.site||"No facility"}),el("span",{class:"rem",text:L.email||"No email"})))))
+        :el("div",{class:"muted small",style:"padding:12px 0"},all.length?"No matches.":"Everyone in your library is already in this event.")),
+      shown.length?el("button",{class:"ghost small",style:"align-self:flex-start",onclick:()=>{const allOn=shown.every(([id])=>sel.has(id));shown.forEach(([id])=>allOn?sel.delete(id):sel.add(id));schedule();}},shown.every(([id])=>sel.has(id))?"Clear selection":"Select all shown"):null,
+      el("div",{class:"row",style:"justify-content:space-between"},el("button",{class:"pill",onclick:()=>openHitter(null,true)},"+ New hitter"),
+        el("div",{class:"row"},el("button",{class:"ghost",onclick:close},"Cancel"),el("button",{class:"primary",disabled:!sel.size,onclick:async()=>{const ids=[...sel];close();await addToEvent(ids);toast(`Added ${ids.length} to this event`);}},sel.size?`Add ${sel.size} to event`:"Add to event")))));}
+const setArch=(id,v)=>saveLib(l=>{l.hitters[id]=Object.assign({},l.hitters[id],{archived:v});},`${v?"Archived":"Reinstated"} in library: ${libH(id).name}`);
+const openEventsFor=id=>inEvent(id)&&EV().phase!=="final"?1:0;
+function eventsTag(id){const n=openEventsFor(id);return n?el("span",{class:"ok",text:`In ${n} open event${n>1?"s":""}`}):null;}
+function archiveModal(id){const L=libH(id),close=()=>{S.modal=null;schedule();},open=openEventsFor(id)>0;
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"alertdialog","aria-modal":"true","aria-labelledby":"ah",style:"max-width:440px"},
+      el("h2",{id:"ah"},"Archive ",flc(L.country),L.name,"?"),
+      el("p",{style:"margin:0"},"Are you sure you want to archive this hitter? They'll move to Archived hitters and won't show up when you pick an event roster. You can reinstate them any time."),
+      open?el("div",{class:"note warn small",text:"Note: this hitter is listed in an open event. Archiving won't remove them from that event. If they're no longer taking part, update the event's roster in Event Details → Hitters."}):null,
+      el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),
+        el("button",{class:"primary",onclick:()=>{close();setArch(id,true);toast("Archived "+L.name);}},"Archive"))));}
+function librarySection(){const every=Object.entries(S.lib?.hitters||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name)),q=(D.lib_q||"").toLowerCase();
+  const match=([id,L])=>!q||L.name.toLowerCase().includes(q)||(L.email||"").includes(q)||(L.site||"").toLowerCase().includes(q);
+  const active=every.filter(([,L])=>!L.archived),arch=every.filter(([,L])=>L.archived);
+  const ids=active.filter(match).map(([id])=>id),aids=arch.filter(match).map(([id])=>id);
+  const bulk=inp("libBulk",{tag:"textarea",rows:4,placeholder:"One per line: Name, Country, Facility, Email\nAscher Dent, Canada, The 9th Hole - Burlington, ascher@email.com","aria-label":"Paste hitters"});
+  const addBulk=async()=>{const lines=bulk.value.split(/\n/).map(l=>l.trim()).filter(Boolean);if(!lines.length)return toast("Paste at least one line");D.libBulk="";
+    const rows=lines.map(parseLine);await saveLib(l=>rows.forEach(r=>l.hitters[r.id]={name:r.name,country:r.country,site:r.site,email:r.email,addedAt:Date.now()}),`Added ${rows.length} hitters to the library`);toast(`Added ${rows.length} to the library`);};
+  return[el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Hitter Library"}),el("div",{class:"row"},el("span",{class:"chip",text:active.length+" hitters"}),el("button",{class:"primary",onclick:()=>openHitter(null,false)},"Add hitter"))),
+    el("p",{class:"muted small",style:"margin:0"},"Every hitter you've added, kept from event to event. Only you can see this list and the emails."),
+    el("input",{id:"i_lib_q",type:"search",placeholder:"Search name, email or facility",value:D.lib_q||"","aria-label":"Search library",oninput:e=>{D.lib_q=e.target.value;schedule();}}),
+    el("div",{class:"roster"},libRows(ids,{empty:active.length?"No matches.":"Your library is empty. Add a hitter or paste a list.",
+      sub:id=>[eventsTag(id)],
+      btns:id=>[el("button",{class:"pill",onclick:()=>openHitter(id)},"Edit"),el("button",{class:"pill",onclick:()=>{if(inEvent(id)){S.modal="arch:"+id;schedule();}else{setArch(id,true);toast("Archived "+libH(id).name);}}},"Archive")]})),
+    el("details",{},el("summary",{class:"small",style:"cursor:pointer;font-weight:600"},"Paste a list"),el("div",{class:"sec",style:"margin-top:8px"},bulk,el("div",{class:"row"},el("button",{onclick:addBulk},"Add to library"))))),
+    el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Archived hitters"}),el("span",{class:"chip",text:arch.length+" archived"})),
+      el("p",{class:"muted small",style:"margin:0"},"Archived hitters are hidden when you pick an event roster. Reinstate to use them again."),
+      el("div",{class:"roster"},libRows(aids,{empty:arch.length?"No matches.":"No archived hitters.",sub:id=>[eventsTag(id)],
+        btns:id=>[el("button",{class:"pill",onclick:()=>setArch(id,false)},"Reinstate")]})))];}
+function splitLoc(l){const k=(l||"").lastIndexOf(" - ");return k<0?{f:l||"",c:""}:{f:l.slice(0,k),c:l.slice(k+3)};}
+const facLabel=f=>f.city?f.name+" - "+f.city:f.name;
+const facList=()=>Object.entries(S.lib?.facilities||{}).map(([id,f])=>Object.assign({id,label:facLabel(f)},f)).sort((a,b)=>a.label.localeCompare(b.label));
+const facByLabel=l=>facList().find(f=>f.label===l);
+function evFacilities(){return[...new Set((EV()?.hitters||[]).map(h=>h.site).filter(Boolean))].sort();}
+const libAt=l=>Object.values(S.lib?.hitters||{}).filter(h=>h.site===l).length;
+const facInOpenEvent=l=>EV()&&EV().phase!=="final"&&EV().hitters.some(h=>h.site===l);
+async function renameFac(id,nf){const f=S.lib.facilities[id],old=facLabel(f),nl=facLabel(nf);
+  await saveLib(l=>{l.facilities[id]=Object.assign({},l.facilities[id],nf);if(nl!==old)for(const h of Object.values(l.hitters||{}))if(h.site===old)h.site=nl;},nl!==old?`Renamed facility ${old} to ${nl}`:null);
+  if(nl!==old&&EV())await saveEvent(e=>{e.hitters.forEach(h=>{if(h.site===old)h.site=nl});for(const u in e.assign||{})e.assign[u]=e.assign[u].map(x=>x==="loc:"+old?"loc:"+nl:x);});}
+function facilityModal(id){const f=id?S.lib?.facilities?.[id]:null,isNew=!f,k=id||"new",close=()=>{S.modal=null;["f","c"].forEach(x=>delete D["lm_"+x+"_"+k]);schedule();};
+  const fac=inp("lm_f_"+k,{placeholder:"e.g. The 9th Hole","aria-label":"Facility name",autocomplete:"off"},f?.name||"");
+  const city=inp("lm_c_"+k,{placeholder:"e.g. Burlington","aria-label":"City",autocomplete:"off"},f?.city||"");
+  const save=async(another)=>{const n=fac.value.trim(),c=city.value.trim();if(!n)return toast("Enter the facility name");if(!c)return toast("Enter the city");
+    const lbl=n+" - "+c;if(facList().some(x=>x.id!==id&&x.label.toLowerCase()===lbl.toLowerCase()))return toast("That facility is already in your library");
+    if(isNew&&another===true){delete D["lm_f_"+k];delete D["lm_c_"+k];S.focusId="i_lm_f_new";schedule();}else close();
+    if(isNew){await saveLib(l=>{l.facilities=l.facilities||{};l.facilities[rid("f")]={name:n,city:c,addedAt:Date.now()};},"Added facility "+lbl);if(another===true)toast("Added "+lbl);}else await renameFac(id,{name:n,city:c});};
+  const n=f?libAt(facLabel(f)):0;
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"lmh"},
+      el("h2",{id:"lmh",text:isNew?"Add facility":"Edit facility"}),
+      el("form",{class:"pform",onsubmit:e=>{e.preventDefault();save()}},el("label",{class:"f wide"},"Facility name",fac),el("label",{class:"f wide"},"City",city),
+        el("div",{class:"row wide",style:"justify-content:space-between"},el("span",{class:"muted small",text:"Shows as “Facility name - City”."}),
+          el("div",{class:"row"},el("button",{class:"ghost",type:"button",onclick:close},"Cancel"),isNew?el("button",{class:"ghost",type:"button",onclick:()=>save(true)},"Save & add another"):null,el("button",{class:"primary",type:"submit"},"Save")))),
+      n?el("div",{class:"note small",text:`${n} hitter${n>1?"s":""} at this facility will update to the new name.`}):null));}
+function facArchiveModal(id){const f=S.lib.facilities[id],lbl=facLabel(f),close=()=>{S.modal=null;schedule();};
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"alertdialog","aria-modal":"true","aria-labelledby":"fah",style:"max-width:440px"},
+      el("h2",{id:"fah",text:`Archive ${lbl}?`}),
+      el("p",{style:"margin:0"},"Are you sure you want to archive this facility? It moves to Archived facilities and won't show up when you set a hitter's facility. You can reinstate it any time."),
+      facInOpenEvent(lbl)?el("div",{class:"note warn small",text:"Note: hitters at this facility are listed in an open event. Archiving won't change them or who can score there. Update the event in Event Details → Hitters if needed."}):null,
+      el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),
+        el("button",{class:"primary",onclick:()=>{close();saveLib(l=>{l.facilities[id].archived=true;},"Archived facility "+lbl);toast("Archived "+lbl);}},"Archive"))));}
+function facilitySection(){const all=facList(),q=(D.fac_q||"").toLowerCase(),m=f=>!q||f.label.toLowerCase().includes(q);
+  const act=all.filter(f=>!f.archived),arch=all.filter(f=>f.archived);
+  const row=(f,btns)=>{const n=libAt(f.label),open=facInOpenEvent(f.label),ne=(EV()?.hitters||[]).filter(h=>h.site===f.label).length;
+    return el("div",{class:"rrow"},el("div",{class:"rmain"},el("strong",{text:f.name}),el("div",{class:"rsub"},el("span",{text:f.city||"No city"}),el("span",{text:n+" hitter"+(n===1?"":"s")+" in library"}))),
+      el("div",{class:"racts"},...btns));};
+  return[el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Facility Library"}),el("div",{class:"row"},el("span",{class:"chip",text:act.length+" facilit"+(act.length===1?"y":"ies")}),
+      el("button",{class:"primary",onclick:()=>{S.modal="addFac";S.focusId="i_lm_f_new";schedule();}},"Add facility"))),
+    el("p",{class:"muted small",style:"margin:0"},"Every facility you run events at. Set each hitter's facility in the Hitter Library. Anyone linked at a facility can enter scores for every hitter there."),
+    all.length>6?el("input",{id:"i_fac_q",type:"search",placeholder:"Search facility or city",value:D.fac_q||"","aria-label":"Search facilities",oninput:e=>{D.fac_q=e.target.value;schedule();}}):null,
+    el("div",{class:"roster"},act.filter(m).length?act.filter(m).map(f=>row(f,[el("button",{class:"pill",onclick:()=>{S.modal="fac:"+f.id;S.focusId="i_lm_f_"+f.id;schedule();}},"Edit"),
+      el("button",{class:"pill",onclick:()=>{if(facInOpenEvent(f.label)){S.modal="facarch:"+f.id;schedule();}else{saveLib(l=>{l.facilities[f.id].archived=true;},"Archived facility "+f.label);toast("Archived "+f.label);}}},"Archive")]))
+      :el("div",{class:"muted li",text:act.length?"No matches.":"No facilities yet. Tap Add facility."}))),
+    el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Archived facilities"}),el("span",{class:"chip",text:arch.length+" archived"})),
+      el("div",{class:"roster"},arch.filter(m).length?arch.filter(m).map(f=>row(f,[el("button",{class:"pill",onclick:()=>saveLib(l=>{l.facilities[f.id].archived=false;},"Reinstated facility "+f.label)},"Reinstate")]))
+        :el("div",{class:"muted li",text:"No archived facilities."})))];}
+let facMigrating=false;function migrateFac(){if(facMigrating||!S.lib||!S.libLoaded||!S.me.isOwner)return;const have=new Set(facList().map(f=>f.label));
+  const want=new Set([...(EV()?.locations||[]),...Object.values(S.lib.hitters||{}).map(h=>h.site),...(EV()?.hitters||[]).map(h=>h.site)].filter(x=>x&&!have.has(x)));
+  if(!want.size)return;facMigrating=true;saveLib(l=>{l.facilities=l.facilities||{};for(const lb of want){const sp=splitLoc(lb);l.facilities[rid("f")]={name:sp.f,city:sp.c,addedAt:Date.now()};}},`Moved ${want.size} facilit${want.size>1?"ies":"y"} into the Facility Library`).finally(()=>{facMigrating=false;});}
+function settingsSection(){const ev=EV();
+  const num=(k,label,min,max)=>el("label",{class:"f"},label,el("input",{id:"s_"+k,type:"number",min,max,value:ev[k],onchange:e=>{const v=Math.max(min,Math.min(max,parseInt(e.target.value)||min));saveEvent(x=>x[k]=v,`${label}: ${v}`)}}));
+  const txt=(k,label,type)=>el("label",{class:"f"},label,el("input",{id:"s_"+k,type:type||"text",value:ev[k]||"",onchange:e=>saveEvent(x=>x[k]=e.target.value,`${label} changed`)}));
+  const divRows=ev.divisions.map((d,i)=>el("div",{class:"li"},
+    el("input",{id:"dn_"+d.id,value:d.name,"aria-label":"Division name",style:"flex:1 1 120px",onchange:e=>saveEvent(x=>x.divisions[i].name=e.target.value.trim()||"Division",`Renamed division to ${e.target.value}`)}),
+    el("input",{id:"ds_"+d.id,type:"number",min:0,max:128,value:d.size||"",placeholder:"rest","aria-label":"Division size",style:"width:5.5em",onchange:e=>{const v=Math.max(0,parseInt(e.target.value)||0);saveEvent(x=>x.divisions[i].size=v,`${d.name} size: ${v||"rest"}`)}}),
+    el("select",{id:"df_"+d.id,"aria-label":"Extra hitters",value:d.fill,onchange:e=>saveEvent(x=>x.divisions[i].fill=e.target.value,`${d.name}: ${e.target.value==="bye"?"byes":"play-ins"}`)},el("option",{value:"playin"},"Play-ins"),el("option",{value:"bye"},"Byes")),
+    el("button",{class:"ghost","aria-label":"Remove division",disabled:ev.divisions.length<2,onclick:()=>saveEvent(x=>x.divisions.splice(i,1),`Removed division ${d.name}`)},"Remove")));
+  return [el("section",{class:"panel sec"},el("h2",{text:"Event details"}),
+    el("div",{class:"grid"},txt("name","Event name"),txt("date","Date","date"),
+      num("rrSets","Round robin sets",1,8),num("balls","Balls per set",1,12),num("mpBalls","Match play balls",1,12))),
+    el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Divisions"}),el("span",{class:"chip",text:ev.divisions.length+" division"+(ev.divisions.length===1?"":"s")})),
+    el("p",{class:"muted small",style:"margin:0"},"Filled top-down from the standings. Blank size takes everyone left. Play-ins pair the bottom seeds; byes let top seeds skip round one."),
+    el("div",{class:"list"},divRows),
+    el("div",{class:"row"},el("button",{onclick:()=>saveEvent(x=>x.divisions.push({id:rid("d"),name:"New division",size:8,fill:"playin"}),"Added a division")},"Add division")),
+    ev.seeding?el("div",{class:"note small",text:"Divisions are locked for match play. Division changes apply the next time you re-seed."}):null)];}
+function permSummary(u){const p=perms(u),parts=[];if(p.facs.size)parts.push("everyone at "+[...p.facs].join(", "));
+  const extra=[...p.people].filter(x=>!(hitter(x)?.site&&p.facs.has(hitter(x).site))).map(nameOf);if(extra.length)parts.push(extra.join(", "));
+  if(!parts.length)return p.me?"Can enter for themselves only":"Not linked yet";return(p.me?"Can enter for themselves and ":"Scorekeeper for ")+parts.join(" · ");}
+function permModal(u){const ev=EV(),p=perms(u),close=()=>{S.modal=null;S.permDraft=null;schedule();};
+  const d=S.permDraft||(S.permDraft={facs:new Set(p.facs),people:new Set(p.people)});
+  const facs=evFacilities(),covered=x=>{const st=hitter(x)?.site;return!!st&&d.facs.has(st);};
+  const tog=(set,v,on)=>{on?set.add(v):set.delete(v);schedule();};
+  const save=()=>{const a=p.me?[p.me]:[];const own=p.h?.site;
+    for(const f of d.facs)if(f!==own)a.push("loc:"+f);if(own&&!d.facs.has(own))a.push("noself");
+    for(const x of d.people)if(!covered(x)&&x!==p.me)a.push("for:"+x);
+    const list=[...d.facs].map(f=>"everyone at "+f).concat([...d.people].filter(x=>!covered(x)).map(nameOf)).join(", ");
+    close();saveEvent(e=>{e.assign=e.assign||{};if(a.length)e.assign[u]=a;else delete e.assign[u];},`${pname(u)} can enter for: ${list||(p.me?"themselves only":"nobody")}`);};
+  const box=(checked,label,sub,on,dis)=>el("label",{class:"pickrow"+(dis?" locked":"")},el("input",{type:"checkbox",checked,disabled:!!dis,onchange:e=>on(e.target.checked)}),
+    el("span",{class:"rmain"},el("span",{style:"font-weight:600"},label),sub?el("span",{class:"rsub"},el("span",{text:sub})):null));
+  return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
+    el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"pmh",style:"max-width:520px"},
+      el("div",{class:"sechead"},el("h2",{id:"pmh",text:"Who can "+pname(u)+" enter for?"}),p.h?el("span",{class:"chip on"},flc(p.h.country),p.h.name):el("span",{class:"chip",text:"Scorekeeper"})),
+      p.me?el("p",{class:"muted small",style:"margin:0"},"They can always enter for themselves. Tick a facility to cover everyone there, or pick people one by one."):null,
+      el("strong",{class:"small",text:"Facilities"}),
+      el("div",{class:"pick"},facs.length?facs.map(f=>{const n=hittersAt(f).length;return box(d.facs.has(f),"Everyone at "+f,n+" hitter"+(n===1?"":"s")+(p.h?.site===f?" · their own facility":""),v=>tog(d.facs,f,v));})
+        :el("div",{class:"muted small",style:"padding:10px 0"},"No hitters in this event have a facility yet.")),
+      el("strong",{class:"small",text:"Individual hitters"}),
+      el("div",{class:"pick"},ev.hitters.filter(x=>x.id!==p.me).map(x=>{const cv=covered(x.id);
+        return box(cv||d.people.has(x.id),[flc(x.country),x.name],cv?"Included through "+x.site:(x.site||"No facility"),v=>tog(d.people,x.id,v),cv);})),
+      el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),el("button",{class:"primary",onclick:save},"Save"))));}
+function scorersSection(){const ev=EV(),assign=ev.assign||{},people=[...new Set([...Object.keys(S.joins),...Object.keys(assign)])];
+  const setA=(u,a,log)=>saveEvent(e=>{e.assign=e.assign||{};if(a.length)e.assign[u]=a;else delete e.assign[u];},log);
+  const taken={};for(const [u,a] of Object.entries(assign)){const m=idOf(a);if(m)taken[m]=u;}
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Logins"}),el("span",{class:"chip",text:people.length+" signed up"})),
+    el("p",{class:"muted small",style:"margin:0"},"People who tapped “Request to enter scores.” A sign-in email that matches a hitter's email links them to that hitter, and they can enter for everyone at their facility. Tap “Can enter for” to add more facilities or people."),
+    el("div",{class:"roster"},people.length?people.map(u=>{const a=assign[u]||[],p=perms(u),em=S.profiles[u]?.email;
+      const setRoster=v=>{const keep=a.filter(x=>x.includes(":"));setA(u,(v?[v]:[]).concat(keep),v?`Matched ${pname(u)} to roster: ${nameOf(v)}`:`${pname(u)} set as scorekeeper`);};
+      return el("div",{class:"rrow lrow"},
+        el("div",{class:"rmain"},el("strong",{text:pname(u)}),el("div",{class:"rsub"},em?el("span",{class:"rem",text:em}):null,el("span",{class:p.me||p.facs.size||p.people.size?"ok":"",text:permSummary(u)}))),
+        el("div",{class:"lsel"},
+          el("label",{class:"f"},"Roster",el("select",{id:"lr_"+u,value:p.me||"",onchange:e=>setRoster(e.target.value)},el("option",{value:""},"Not on roster (scorekeeper)"),
+            ev.hitters.filter(x=>x.status!=="withdrawn"||x.id===p.me).map(x=>el("option",{value:x.id},x.name+(taken[x.id]&&taken[x.id]!==u?" (linked)":""))))),
+          el("div",{class:"f"},el("span",{text:"Permissions"}),el("button",{class:"pill",onclick:()=>{S.modal="perm:"+u;S.permDraft=null;schedule();}},"Can enter for…"))));}):el("div",{class:"muted li",text:"Nobody has requested access yet. Share this page with hitters or scorers as Contributors, then they tap “Request to enter scores”."})),
+    !S.me.id||S.joins[S.me.id]||assign[S.me.id]?null:el("div",{class:"row"},el("button",{onclick:async()=>{await write("joins/"+S.me.id,{at:Date.now()});S.joins[S.me.id]={at:Date.now()};schedule();}},"Add myself as a scorer")),
+    el("details",{},el("summary",{class:"small",style:"cursor:pointer;font-weight:600"},"Who can enter scores"),
+      el("p",{class:"small muted"},"Score entry needs write access. Members of your organization get it when you share the page as Contributor. People outside your organization can watch the tracker by link, but can enter only if you invite them by email as Editor, and only while the page has no public link. Editors can also change the page, so give that level only to people you trust.")));}
+function correctionsSection(){const ev=EV(),hs=ev.hitters;
+  const hSel=el("select",{id:"c_h","aria-label":"Hitter",value:D.c_h||"",onchange:e=>{D.c_h=e.target.value;schedule()}},el("option",{value:""},"Choose hitter…"),hs.map(h=>el("option",{value:h.id},h.name)));
+  const sSel=el("select",{id:"c_s","aria-label":"Set",value:D.c_s||"0",onchange:e=>{D.c_s=e.target.value;schedule()}},[...Array(ev.rrSets)].map((_,i)=>el("option",{value:String(i)},"Set "+(i+1))));
+  const v=inp("c_v",{class:"yds",inputmode:"decimal",placeholder:"yds","aria-label":"Corrected distance"});
+  const cur=D.c_h?rrCell(D.c_h,+(D.c_s||0)):null;
+  const apply=()=>{const h=D.c_h,i=D.c_s||"0",n=parseYds(v.value);if(!h)return toast("Choose a hitter");if(n==null)return toast("Enter the distance in yards");D.c_v="";
+    numChange([{t:"rr",hid:h,i,v:n}],`Round robin: ${nameOf(h)} set ${+i+1} → ${fmt(n)}${cur?` (was ${fmt(cur.v)})`:""}`);};
+  const clear=()=>{const h=D.c_h,i=D.c_s||"0";if(!h)return;numChange([{t:"rr",hid:h,i,v:null}],`Round robin: cleared director value for ${nameOf(h)} set ${+i+1}`);};
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Corrections"}),undoBtn()),
+    el("p",{class:"muted small",style:"margin:0"},"Enter or fix a round robin number. Overrides entries and is logged."),
+    el("div",{class:"row"},hSel,sSel,v,el("button",{class:"primary",onclick:apply},"Save")),
+    D.c_h?el("div",{class:"small muted"},"Current: ",cur?`${fmt(cur.v)} yds (${cur.src==="td"?"director":"entered "+tstr(cur.at)})`:"no number",
+      cur&&cur.src==="td"?el("button",{class:"ghost",style:"margin-left:8px",onclick:clear},"Remove director value"):null):null);}
+function matchControl(){const list=[];
+  for(const b of S.brackets)for(const r of Object.values(b.res))if(r.a!==undefined&&r.b!==undefined&&!["bye","void","forfeit"].includes(r.status))list.push({b,r});
+  const order={tie:0,live:1,td:2,done:3};list.sort((x,y)=>(order[x.r.status]??9)-(order[y.r.status]??9));
+  const setW=(r,w,log)=>saveAdmin(a=>{if(w)a.mpWinner[r.pk]=w;else delete a.mpWinner[r.pk];},log);
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Match control"}),el("div",{class:"row"},el("span",{class:"muted small",text:"Ties and open matches first"}),undoBtn())),
+    el("div",{class:"list"},list.length?list.map(({b,r})=>{const st={tie:["Tie","mark"],live:[r.ea.committed&&r.eb.committed?"Revealing":(+!!r.ea.committed + +!!r.eb.committed)+"/2 locked",""],td:["Director call","on"],done:["Final","on"]}[r.status]||[r.status,""];
+      const sc=r.ea?.revealed&&r.eb?.revealed?` ${fmt(r.ea.v)} – ${fmt(r.eb.v)}`:"";
+      return el("div",{class:"li"+(S.focusMatch===r.pk?" focus":""),id:"mc_"+r.pk},el("span",{class:"chip "+st[1],text:st[0]}),el("span",{class:"grow"},el("strong",{text:`${nameOf(r.a)} vs ${nameOf(r.b)}`}),el("span",{class:"muted small",text:` · ${b.div.name}, ${r.round}`}),el("span",{class:"mono small",text:sc})),
+        (r.ea?.bad||r.eb?.bad)?el("span",{class:"chip bad",text:"Failed check"}):null,
+        el("button",{class:"ghost",onclick:()=>setW(r,r.a,`${b.div.name} ${r.round}: advanced ${nameOf(r.a)} over ${nameOf(r.b)}`)},nameOf(r.a).split(" ")[0]+" wins"),
+        el("button",{class:"ghost",onclick:()=>setW(r,r.b,`${b.div.name} ${r.round}: advanced ${nameOf(r.b)} over ${nameOf(r.a)}`)},nameOf(r.b).split(" ")[0]+" wins"),
+        r.status==="td"?el("button",{class:"ghost",onclick:()=>setW(r,null,`${b.div.name} ${r.round}: cleared director call`)},"Clear call"):null,
+        el("button",{onclick:()=>openRehit(r)},"Rehit"));}):el("div",{class:"muted li",text:"No matches ready yet."})));}
+function seedEditor(){const ev=EV(),sd=ev.seeding;const inDiv=new Set(sd.divisions.flatMap(d=>d.seeds));
+  const unseeded=ev.hitters.filter(h=>h.status!=="withdrawn"&&!inDiv.has(h.id));
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Division seeds"}),el("span",{class:"muted small",text:"Edit one division without touching the others"})),
+    unseeded.length?el("div",{class:"note warn"},`Not in any division: ${unseeded.map(h=>h.name).join(", ")}`):null,
+    el("div",{class:"cols"},sd.divisions.map((d,di)=>{const off=sd.divisions.slice(0,di).reduce((n,x)=>n+x.seeds.length,0);const dr=S.seedDraft[d.id]||{seeds:d.seeds.slice(),fill:d.fill};const dirty=JSON.stringify(dr)!==JSON.stringify({seeds:d.seeds,fill:d.fill});
+      const upd=f=>{const n=clone(dr);f(n);S.seedDraft[d.id]=n;schedule();};
+      const avail=ev.hitters.filter(h=>h.status!=="withdrawn"&&!dr.seeds.includes(h.id));
+      return el("div",{class:"sec",style:"border:1px solid var(--line);border-radius:8px;padding:12px"},el("div",{class:"sechead"},el("h3",{text:d.name}),el("span",{class:"muted small",text:shapeText(dr.seeds.length,dr.fill)})),
+        el("div",{class:"list"},dr.seeds.map((id,i)=>el("div",{class:"li",style:"padding:4px 0"},el("span",{class:"mono small",style:"width:2.4em",text:"#"+(off+i+1)}),el("span",{class:"grow"},fl(id),nameOf(id)+(hitter(id)?.status==="withdrawn"?" (WD)":"")),
+          el("button",{class:"ghost","aria-label":"Move up",disabled:i===0,onclick:()=>upd(n=>{[n.seeds[i-1],n.seeds[i]]=[n.seeds[i],n.seeds[i-1]]})},"↑"),
+          el("button",{class:"ghost","aria-label":"Move down",disabled:i===dr.seeds.length-1,onclick:()=>upd(n=>{[n.seeds[i+1],n.seeds[i]]=[n.seeds[i],n.seeds[i+1]]})},"↓"),
+          el("button",{class:"ghost","aria-label":"Remove from division",onclick:()=>upd(n=>n.seeds.splice(i,1))},"✕")))),
+        el("div",{class:"row"},el("select",{id:"sa_"+d.id,"aria-label":"Add hitter to division",value:"",onchange:e=>{const h=e.target.value;if(h)upd(n=>n.seeds.push(h))}},el("option",{value:""},"Add hitter…"),avail.map(h=>el("option",{value:h.id},h.name+(inDiv.has(h.id)?" (in another division)":"")))),
+          el("select",{id:"sf_"+d.id,"aria-label":"Extra hitters",value:dr.fill,onchange:e=>upd(n=>n.fill=e.target.value)},el("option",{value:"playin"},"Play-ins"),el("option",{value:"bye"},"Byes"))),
+        dirty?el("div",{class:"row"},el("button",{class:"primary",onclick:async()=>{const others=new Set(sd.divisions.filter((_,j)=>j!==di).flatMap(x=>x.seeds));
+          await saveEvent(e=>{const t=e.seeding.divisions[di];t.seeds=dr.seeds.slice();t.fill=dr.fill;t.ver=rid("v");e.seeding.divisions.forEach((x,j)=>{if(j!==di&&dr.seeds.some(h=>x.seeds.includes(h))){x.seeds=x.seeds.filter(h=>!dr.seeds.includes(h));x.ver=rid("v");}});},`Rebuilt ${d.name} bracket (${dr.seeds.length} hitters)`);
+          delete S.seedDraft[d.id];schedule();}},"Rebuild this bracket"),el("button",{class:"ghost",onclick:()=>{delete S.seedDraft[d.id];schedule()}},"Discard"),
+          el("span",{class:"muted small",text:"Results in this division start over."})):null);})));}
+function seedPreview(){const ev=EV(),rows=ranking(),p=project(rows.map(r=>r.h.id),ev.divisions);
+  const tot=rows.length*ev.rrSets,got=rows.reduce((n,r)=>n+r.vals.length,0),done=rows.length>0&&got>=tot;
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Division seeds"}),el("span",{class:"chip"+(done?" on":" mark"),text:done?"All sets in · locks when match play starts":`Fills in when all sets are in · ${got} of ${tot}`})),
+    p.leftover.length?el("div",{class:"note bad",text:`${p.leftover.length} hitters don't fit any division. Leave one division's size blank in Event Details.`}):null,
+    el("div",{class:"cols"},p.divs.map((d,di)=>{const off=p.divs.slice(0,di).reduce((n,x)=>n+x.seeds.length,0);return el("div",{class:"sec",style:"border:1px solid var(--line);border-radius:8px;padding:12px"},el("div",{class:"sechead"},el("h3",{text:d.name}),el("span",{class:"muted small",text:shapeText(d.seeds.length,d.fill)})),
+      !done?el("div",{class:"muted small",text:d.seeds.length?"Seeds show once round robin is complete.":"No hitters yet."})
+      :el("div",{class:"list"},d.seeds.length?d.seeds.map((id,i)=>el("div",{class:"li",style:"padding:4px 0"},el("span",{class:"mono small",style:"width:2.4em",text:"#"+(off+i+1)}),el("span",{class:"grow"},fl(id),nameOf(id)))):el("div",{class:"muted li",text:"No hitters yet."})));})));}
+function testerSection(){const divs=EV()?.divisions||defaultEvent().divisions;
+  const n=Math.max(0,Math.min(256,parseInt(D.testN??S.testN)||0));
+  const ids=[...Array(n)].map((_,i)=>"T"+(i+1));const p=project(ids,divs);
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Test a field size"}),el("span",{class:"muted small",text:"Nothing saves"})),
+    el("div",{class:"row"},el("label",{class:"f"},"Hitters",el("input",{id:"i_testN",type:"number",min:0,max:256,value:n,style:"width:6em",oninput:e=>{D.testN=e.target.value;schedule()}}))),
+    p.leftover.length?el("div",{class:"note bad",text:`${p.leftover.length} hitters don't fit. Leave one division's size blank so it takes everyone left.`}):null,
+    p.divs.map(d=>{const seeds=d.seeds;const rounds=buildBracket({id:d.id,ver:"t",seeds,fill:d.fill});const res=resolveDiv({seeds},rounds,false);
+      const first=seeds.length?+seeds[0].slice(1):0;
+      return el("div",{class:"sec"},el("div",{class:"sechead"},el("h3",{text:d.name}),el("span",{class:"muted small",text:shapeText(seeds.length,d.fill)+(seeds.length?` · overall ranks ${first}–${first+seeds.length-1}`:"")})),
+        rounds.length?el("div",{class:"bracket"},el("div",{class:"rounds"},bracketCols(rounds,m=>{{const r=res[m.id];const s=(x,ref)=>el("div",{class:"slot"+(x===undefined||x==="BYE"?" tbd":"")},el("span",{class:"seed",text:x&&x!=="BYE"?seeds.indexOf(x)+1:""}),
+            el("span",{class:"nm",text:x===undefined?"Winner advances":x==="BYE"?"Bye":"Overall #"+x.slice(1)}),el("span",{class:"yd"}));
+            return el("div",{class:"match"},s(r.a),s(r.b),r.status==="bye"?el("div",{class:"st",text:"Bye"}):null);}},rd=>rd.label))):null);}));}
+function entryLog(){const out=[],ok=(u,h)=>assigned(u,h)?"":" · not counted (not linked)";
+  const ml=key=>{const info=S.keyIndex[key],att=+key.split("#")[1]||0;return info?` (${info.div.name} ${info.res.round}${att?" rehit":""})`:"";};
+  for(const [u,d] of Object.entries(S.rr))for(const [hk,sets] of Object.entries(d?.e||{})){const hid=curKey(hk);if(hid==null)continue;for(const [i,c] of Object.entries(sets||{})){if(!c||!c.at)continue;const chain=[...(c.hist||[]),{v:c.v,at:c.at}];
+    chain.forEach((x,j)=>{if(x.by&&x.by!==u)return;const prev=chain[j-1];out.push({at:x.at,k:"entry",t:prev?`${pname(u)} changed round robin set ${+i+1} for ${nameOf(hid)}: ${fmt(prev.v)} → ${fmt(x.v)} yds${ok(u,hid)}`:`${pname(u)} entered round robin set ${+i+1} for ${nameOf(hid)}: ${fmt(x.v)} yds${ok(u,hid)}`});});}}
+  for(const [u,d] of Object.entries(S.commits)){for(const [key,o] of Object.entries(d?.m||{})){if(curKey(key)==null)continue;for(const [hid,c] of Object.entries(o||{}))if(c?.at)out.push({at:c.at,k:"entry",t:`${pname(u)} locked in a match play number for ${nameOf(hid)}${ml(key)}${ok(u,hid)}`});}
+    for(const [hk,o] of Object.entries(d?.ahead||{})){const hid=curKey(hk);if(hid==null)continue;for(const [k,c] of Object.entries(o||{}))if(c?.at)out.push({at:c.at,k:"entry",t:`${pname(u)} locked in Match play – Set ${+k+1} for ${nameOf(hid)}, hit ahead${ok(u,hid)}`});}}
+  for(const [u,d] of Object.entries(S.joins))if(d?.at)out.push({at:d.at,k:"login",t:`${pname(u)} requested to enter scores`});
+  return out;}
+function logSection(){const f=S.logf||"all";const dir=(S.admin?.log||[]).filter(l=>(l.ev||"")===(EV()?.eid||"")).map(l=>({at:l.at,k:"director",t:l.t}));
+  const all=dir.concat(entryLog()).filter(x=>f==="all"||x.k===f||(f==="entry"&&x.k==="login")).sort((a,b)=>b.at-a.at).slice(0,400);
+  const kl={director:["Director","on"],entry:["Entry","mark"],login:["Login",""]};
+  return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("div",{class:"row"},el("h2",{text:"Activity log"}),undoBtn()),
+      el("div",{class:"subnav",style:"gap:6px"},[["all","All"],["director","Director"],["entry","Entries"]].map(([v,l])=>el("button",{"aria-selected":f===v?"true":"false",style:"padding:5px 12px;font-size:12px",onclick:()=>{S.logf=v;schedule();}},l)))),
+    el("div",{class:"list log"},all.length?all.map(l=>el("div",{class:"li"},el("span",{class:"mono small muted",style:"min-width:9em",text:tstr(l.at)}),el("span",{class:"chip "+kl[l.k][1],text:kl[l.k][0]}),el("span",{class:"grow",text:l.t}))):el("div",{class:"muted li",text:"Every entry and director change shows here with who made it and when."})));}
+
+
+/* ---------- sign-in (email one-time code) ---------- */
+function signInBox(){const L=S.login=S.login||{step:S.needName?"name":"email",email:"",code:"",name:"",err:"",busy:false,devCode:""};
+  if(S.needName)L.step="name";
+  const run=async fn=>{if(L.busy)return;L.busy=true;L.err="";schedule();try{await fn();}catch(e){L.err=e.message||"Something went wrong";}L.busy=false;schedule();};
+  const send=()=>run(async()=>{const r=await LIF.startLogin(L.email.trim());L.devCode=r.devCode||"";L.code="";L.step="code";S.focusId="li_code";});
+  const verify=()=>run(async()=>{const r=await LIF.verifyLogin(L.email.trim(),L.code,"");if(!r.name){S.needName=true;L.step="name";S.focusId="li_name";return;}location.reload();});
+  const saveName=()=>run(async()=>{if(!L.name.trim())throw new Error("Enter your name");await LIF.setName(L.name.trim());location.reload();});
+  const enter=f=>e=>{if(e.key==="Enter"){e.preventDefault();f();}};
+  const box=[];
+  if(L.step==="email"){
+    box.push(el("h3",{text:"Sign in to enter scores"}),el("p",{class:"muted",style:"margin:0"},"We'll email you a 6-digit code. No password and no app to install. You can watch the Tracker without signing in."),
+      el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"li_email",type:"email",autocomplete:"email",inputmode:"email",placeholder:"you@email.com",value:L.email,style:"flex:1 1 220px",oninput:e=>L.email=e.target.value,onkeydown:enter(send)}),
+        el("button",{class:"primary",disabled:L.busy,onclick:send},L.busy?"Sending…":"Email me a code")));
+  }else if(L.step==="code"){
+    box.push(el("h3",{text:"Check your email"}),el("p",{class:"muted",style:"margin:0"},"Enter the 6-digit code we sent to ",el("strong",{text:L.email}),". It expires in 10 minutes."),
+      L.devCode?el("div",{class:"note warn"},"Testing mode, no email service yet. Your code is ",el("strong",{class:"mono",text:L.devCode})):null,
+      el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"li_code",inputmode:"numeric",autocomplete:"one-time-code",maxlength:"6",placeholder:"123456",value:L.code,style:"flex:0 1 160px;letter-spacing:.2em;font-family:var(--f-mono)",oninput:e=>L.code=e.target.value,onkeydown:enter(verify)}),
+        el("button",{class:"primary",disabled:L.busy,onclick:verify},L.busy?"Checking…":"Sign in"),
+        el("button",{disabled:L.busy,onclick:()=>{L.step="email";L.err="";schedule();}},"Use a different email"),
+        el("button",{disabled:L.busy,onclick:send},"Send a new code")));
+  }else{
+    box.push(el("h3",{text:"What's your name?"}),el("p",{class:"muted",style:"margin:0"},"This is how the director and the activity log will see you."),
+      el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"li_name",autocomplete:"name",placeholder:"First and last name",value:L.name,style:"flex:1 1 220px",oninput:e=>L.name=e.target.value,onkeydown:enter(saveName)}),
+        el("button",{class:"primary",disabled:L.busy,onclick:saveName},L.busy?"Saving…":"Continue")));
+  }
+  if(L.err)box.push(el("div",{class:"note bad",text:L.err}));
+  return el("section",{class:"panel sec"},...box.filter(Boolean));}
+
+/* ---------- import from the earlier version ---------- */
+function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
+  const pick=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;st.busy=true;st.err="";schedule();
+    try{const j=JSON.parse(await f.text());if(!j.docs)throw new Error("That file isn't a LetItFly export.");
+      const remap=j.ownerId?{[j.ownerId]:S.me.id}:{};const r=await LIF.importDocs(j.docs,remap);st.done=`Imported ${r.imported} records. Reloading…`;schedule();setTimeout(()=>location.reload(),1200);}
+    catch(x){st.err=x.message||"Import failed";st.busy=false;schedule();}};
+  return el("section",{class:"panel sec"},el("h2",{text:"Bring over your existing data"}),
+    el("p",{class:"muted",style:"margin:0"},"Have an export file from the earlier version? Load it here to bring in your hitter and facility libraries and your last event."),
+    el("div",{class:"row"},el("label",{class:"btn"},st.busy?"Importing…":"Choose export file",el("input",{type:"file",accept:".json,application/json",style:"display:none",disabled:st.busy,onchange:pick}))),
+    st.err?el("div",{class:"note bad",text:st.err}):null,st.done?el("div",{class:"note",text:st.done}):null);}
+
+/* ---------- boot ---------- */
+window.addEventListener("hashchange",()=>{const h=(location.hash||"").slice(1);if(VIEWS.includes(h))S.view=h;S.confirm=null;S.modal=null;schedule()});
+document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if(S.warn)S.warn=null;else if(S.sub)S.sub=null;else if(S.modal)S.modal=null;else return;schedule();});
+render();
+(async()=>{const c=window.claude;if(!c||!c.use){S.noDb=true;schedule();return;}
+  const [db,user]=await Promise.all([c.use("db"),c.use("user")]);
+  if(!db){S.noDb=true;schedule();return;}
+  S.db=db;S.user=user;
+  if(user){try{const me=await user.me();S.me={id:me.id,isOwner:!!me.isOwner};}catch(e){}
+    try{const full=await LIF.me();if(full&&!full.name)S.needName=true;}catch(e){}
+    if(!S.me.isOwner){try{S.me.isOwner=!!(await user.isOwner());}catch(e){}}
+    if(!S.me.id){let tries=0;const retry=async()=>{let id=null;try{id=await user.id();}catch(e){}
+        if(id){S.me.id=id;schedule();}else if(++tries<6)setTimeout(retry,2500);};
+      setTimeout(retry,1500);document.addEventListener("visibilitychange",()=>{if(!S.me.id&&!document.hidden){tries=0;retry();}});}}
+  const timer=setTimeout(()=>{S.stale=true;S.loaded=true;schedule();},10000);
+  const err=e=>{console.warn(e);schedule();};
+  db.doc("event/main").onSnapshot(s=>{S.event=s.exists?s.data():null;S.loaded=true;if(!s.metadata.fromCache){clearTimeout(timer);S.stale=false;}schedule();},e=>{clearTimeout(timer);S.loaded=true;err(e)});
+  db.doc("admin/state").onSnapshot(s=>{S.admin=s.exists?s.data():{};schedule();},err);
+  db.doc("private/hitters").onSnapshot(s=>{S.priv=s.exists?s.data():(S.me.isOwner?{emails:{}}:null);S.privLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
+  db.doc("private/library").onSnapshot(s=>{S.lib=s.exists?s.data():(S.me.isOwner?{hitters:{}}:null);S.libLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
+  for(const col of ["joins","rr","commits","reveals"])db.collection(col).onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S[col]=o;schedule();},err);
+  db.collection("vault").onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S.vault=o;schedule();},err);
+  schedule();})();
+})();
+</script>
+</html>

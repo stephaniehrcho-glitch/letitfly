@@ -1,0 +1,15 @@
+{
+  "name": "letitfly",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Live scoring for long drive events",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler d1 migrations apply letitfly --remote && wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply letitfly --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}
