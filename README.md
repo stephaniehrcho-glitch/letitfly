@@ -11,8 +11,8 @@ Runs on Cloudflare Workers with a D1 database. Hitters and scorekeepers sign in 
 | Path | What it is |
 |---|---|
 | `public/index.html` | The app (Tracker, Enter scores, Director) |
-| `public/runtime.js` | Browser data layer: talks to `/api`, polls for live updates |
-| `src/worker.js` | API: email sign-in, sessions, the event data store and its access rules |
+| `public/runtime.js` | Browser data layer: live connection, offline outbox, `/api` calls |
+| `src/worker.js` | API: email sign-in, sessions, the event data store and its access rules, and the `Hub` Durable Object that pushes live updates |
 | `migrations/` | D1 database tables |
 | `wrangler.jsonc` | Cloudflare settings |
 
@@ -45,3 +45,11 @@ npx wrangler dev
 ```
 
 For local sign-in codes on screen, create `.dev.vars` with `DEV_SHOW_CODES=1`.
+
+## During an event
+
+- **Live updates:** every open phone keeps one connection to the `Hub` Durable Object, which pushes each saved change to everyone within a fraction of a second. If a connection drops it reconnects on its own, and a slow background check catches anything missed.
+- **No signal:** entries are saved on the phone and sent automatically when the connection returns. A banner shows what's waiting. Keep the page open until it clears.
+- **Backups:** Director → Backup & Print → Download backup (loads back in through "Bring over your existing data"), plus CSV results for round robin and match play.
+- **Paper fallback:** Director → Backup & Print → Open printable sheets: roster and round robin sheet plus a sheet per division, with any scores already entered filled in.
+- **A change breaks something:** Cloudflare → Workers & Pages → hitthegrid → Deployments → roll back to the previous version.

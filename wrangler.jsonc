@@ -32,5 +32,10 @@
     // "1" shows sign-in codes on screen when no email service is configured. Testing only.
     "DEV_SHOW_CODES": "0"
   },
+  // Live updates: one hub holds every open phone's connection and pushes changes.
+  "durable_objects": {
+    "bindings": [{ "name": "HUB", "class_name": "Hub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }],
   "observability": { "enabled": true }
 }

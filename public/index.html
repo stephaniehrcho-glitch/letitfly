@@ -257,6 +257,24 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .rolebtn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px;border-radius:10px;font-size:15px}
 .rolebtn strong{font-size:16px}.rolebtn span{font-weight:400;font-size:13px}
 .codebig{font-family:var(--f-mono);font-size:30px;font-weight:700;letter-spacing:.04em;padding:6px 0}
+.netbar{border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px;border:1px solid var(--line)}
+.netbar.off{background:#fdecea;color:#7a1d14;border-color:#f3c2bc}.netbar.wait{background:#fff6dd;color:#6b4f00;border-color:#f0dc9c}
+.printbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.psheet{background:#fff;color:#111;border:1px solid #ddd;border-radius:8px;padding:18px;margin-bottom:16px}
+.psheet h2{font-size:18px;margin:6px 0 10px;color:#111}.psheet h3{font-size:14px;margin:12px 0 6px;color:#111}
+.phead>div{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#444}
+.ptable{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
+.ptable th,.ptable td{border:1px solid #999;padding:5px 6px;text-align:left;color:#111}
+.ptable th{background:#f1f1f1;font-weight:600}.ptable .num{text-align:center;width:58px}
+.ptable td.box{min-width:58px;height:22px}.pmuted{color:#555;font-size:11px}
+.pmatch{max-width:520px;break-inside:avoid}
+@media print{
+  body.printing{background:#fff!important}
+  body.printing header.band,body.printing .noprint,body.printing #toast{display:none!important}
+  body.printing main.wrap{max-width:none;padding:0}
+  .psheet{border:0;border-radius:0;padding:0;margin:0;break-after:page}
+  .psheet:last-child{break-after:auto}
+}
 </style>
 
 <header class="band"><div class="wrap">
@@ -532,9 +550,12 @@ function render(){const app=document.getElementById("app");const a=document.acti
       :S.needName||(S.role&&S.role!=="spectator")?signInBox():S.role==="spectator"?codeBox():welcomeBox());
     if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement)n.focus({preventScroll:true});}return;}
   if(EV())computeAll();
+  document.body.classList.toggle("printing",!!S.print&&S.me.isOwner);
+  if(S.print&&S.me.isOwner){app.replaceChildren(...printView());return;}
   const v=S.spectate&&!signedIn?"tracker":view();app.replaceChildren(...[].concat(v==="enter"?vEnter():v==="director"?vDirector():vTracker()));
   if(S.sub&&S.sub.startsWith("rrrow:")&&S.me.isOwner&&EV()&&hitter(S.sub.slice(6)))app.append(rrRowModal(S.sub.slice(6)));
   if(S.warn)app.append(warnModal());
+  const nb=netBanner();if(nb)app.prepend(nb);
   if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement){n.focus({preventScroll:true});try{if(sel&&sel[0]!=null)n.setSelectionRange(sel[0],sel[1])}catch(e){}}}
   if(S.focusId){const n=document.getElementById(S.focusId);if(n){n.focus();S.focusId=null;}}
   if(S.focusMatch&&view()==="director"){const n=document.getElementById("mc_"+S.focusMatch);if(n&&n.scrollIntoView&&!S.focusDone){S.focusDone=true;requestAnimationFrame(()=>n.scrollIntoView({block:"center",behavior:"smooth"}));
@@ -806,8 +827,8 @@ function vDirector(){if(!S.noDb&&!S.me.isOwner)return [el("div",{class:"panel"},
   if(!EV()){out.push(el("section",{class:"panel sec"},el("h2",{text:"Create the event"}),el("p",{class:"muted",style:"margin:0"},"Starts with your usual format: 3 sets × 6 balls, then Champions (10), Competitors (8) and Contender (everyone left), each with play-ins. You can change all of it."),
     el("div",{class:"row"},el("button",{class:"primary",onclick:()=>saveEvent(()=>{},"Created the event")},"Create event"))));out.push(importCard());out.push(testerSection());return out;}
   const ev=EV(),live=(ev.phase==="match"||ev.phase==="final")&&!!ev.seeding;
-  const subs=[["settings","Details"],["hitters","Hitters"],["flow","Event Flow"],["seeds","Seeds"]],tops=[["event","Event Details"],["log","Log"],["library","Hitter Library"],["facilities","Facility Library"]];
-  const t=[...subs,["log"],["library"],["facilities"]].some(x=>x[0]===S.dtab)?S.dtab:ev.phase==="setup"?"settings":"flow",inEv=subs.some(x=>x[0]===t);
+  const subs=[["settings","Details"],["hitters","Hitters"],["flow","Event Flow"],["seeds","Seeds"]],tops=[["event","Event Details"],["log","Log"],["library","Hitter Library"],["facilities","Facility Library"],["backup","Backup & Print"]];
+  const t=[...subs,["log"],["library"],["facilities"],["backup"]].some(x=>x[0]===S.dtab)?S.dtab:ev.phase==="setup"?"settings":"flow",inEv=subs.some(x=>x[0]===t);
   if(inEv)S.lastSub=t;
   const go=k=>{S.dtab=k==="event"?(S.lastSub||(ev.phase==="setup"?"settings":"flow")):k;S.confirm=null;schedule();};
   out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Director sections"},tops.map(([k,l])=>el("button",{role:"tab","aria-selected":(k==="event"?inEv:t===k)?"true":"false",onclick:()=>go(k)},l))));
@@ -819,6 +840,7 @@ function vDirector(){if(!S.noDb&&!S.me.isOwner)return [el("div",{class:"panel"},
   if(t==="log")out.push(logSection());
   if(t==="library")out.push(...librarySection());
   if(t==="facilities")out.push(...facilitySection());
+  if(t==="backup")out.push(...backupSection());
   if(S.modal&&S.modal.startsWith("perm:"))out.push(permModal(S.modal.slice(5)));
   else if(S.modal&&S.modal.startsWith("arch:")&&libH(S.modal.slice(5)))out.push(archiveModal(S.modal.slice(5)));
   else if(S.modal&&S.modal.startsWith("del:")&&hitter(S.modal.slice(4))&&!rosterLocked())out.push(deleteModal(S.modal.slice(4)));
@@ -1258,6 +1280,77 @@ function codeCard(){const ev=EV();if(!ev)return null;const code=ev.code||"";cons
 ),
     el("p",{class:"muted mono",style:"margin:0;font-size:12px;word-break:break-all",text:link}));}
 
+
+/* ---------- connection status banner ---------- */
+function netBanner(){const st=window.LIF&&LIF.status?LIF.status():null;if(!st)return null;const n=st.pending;
+  const plural=n===1?"1 entry":n+" entries";
+  if(!st.online&&n)return el("div",{class:"netbar off"},el("strong",{text:"You're offline. "}),`${plural} saved on this phone. They'll send automatically when you're back online. Keep this page open.`);
+  if(!st.online)return el("div",{class:"netbar off"},el("strong",{text:"You're offline. "}),"Showing the last scores received. They'll update as soon as you reconnect.");
+  if(n)return el("div",{class:"netbar wait"},`Sending ${plural}…`);
+  return null;}
+
+/* ---------- backup, results export, paper backup ---------- */
+function download(name,text,type){const b=new Blob([text],{type});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
+const csvCell=v=>{const t=v==null?"":String(v);return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
+const csv=rows=>"﻿"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n");
+const fileBase=()=>{const ev=EV();return((ev?.name||"event")+" "+(ev?.date||"")).trim().replace(/[^\w#-]+/g,"-").replace(/-+/g,"-");};
+function divisionOf(){const ev=EV();const out={};const sd=ev?.seeding;
+  const divs=sd?sd.divisions:project(ranking().map(r=>r.h.id),ev?.divisions||[]).divs;for(const d of divs)for(const id of d.seeds)out[id]=d.name;return out;}
+function rrRows(){const ev=EV(),n=ev.rrSets,dv=divisionOf();
+  const rows=[["Rank","Hitter","Country","Facility",...[...Array(n)].map((_,i)=>"Set "+(i+1)),"Long","Division"]];
+  for(const r of ranking())rows.push([r.vals.length?r.rank:"",r.h.name,cName(r.h.country),r.h.site||"",...r.cells.map(c=>c?c.v:""),r.long??"",dv[r.h.id]||""]);
+  return rows;}
+function seedNo(b,id){const i=b.div.seeds.indexOf(id);return i<0?"":b.off+i+1;}
+const howText={done:"Played",td:"Director call",bye:"Bye",forfeit:"Forfeit",tie:"Tied, rehit needed",live:"In progress",ready:"Not started",tbd:"Waiting",void:"—"};
+function mpRows(){const rows=[["Division","Round","Seed A","Hitter A","Yards A","Seed B","Hitter B","Yards B","Winner","Result"]];
+  for(const b of S.brackets||[])for(const rd of b.rounds)for(const m of rd.matches){const r=b.res[m.id];if(!r)continue;
+    const nm=x=>x===undefined?"":nameOf(x);
+    rows.push([b.div.name,rd.label,r.a&&r.a!=="BYE"?seedNo(b,r.a):"",nm(r.a),r.ea?.revealed?r.ea.v:"",r.b&&r.b!=="BYE"?seedNo(b,r.b):"",nm(r.b),r.eb?.revealed?r.eb.v:"",r.winner&&r.winner!=="BYE"?nameOf(r.winner):"",howText[r.status]||r.status]);}
+  for(const b of S.brackets||[])if(b.champ)rows.push([b.div.name,"Division winner","","","","","","",nameOf(b.champ),""]);
+  return rows;}
+async function downloadBackup(){try{const j=await LIF.backup();download(`HitTheGrid-backup-${new Date().toISOString().slice(0,16).replace(/[T:]/g,"-")}.json`,JSON.stringify(j,null,1),"application/json");toast("Backup downloaded");}
+  catch(e){toast(e.network?"You're offline. Backups need a connection.":"Couldn't make the backup: "+e.message);}}
+function backupSection(){const ev=EV(),hasMp=!!(S.brackets&&S.brackets.length);
+  return[el("section",{class:"panel sec"},el("h2",{text:"Backup"}),
+      el("p",{class:"muted",style:"margin:0"},"Downloads everything: this event, the Hitter and Facility Libraries, logins and scores. Keep a copy before and after each event. It can be loaded back in if anything ever goes wrong."),
+      el("div",{class:"row"},el("button",{class:"primary",onclick:downloadBackup},"Download backup"))),
+    el("section",{class:"panel sec"},el("h2",{text:"Results export"}),
+      el("p",{class:"muted",style:"margin:0"},"Spreadsheet files (CSV) that open in Excel, Numbers or Google Sheets."),
+      el("div",{class:"row",style:"flex-wrap:wrap"},
+        el("button",{onclick:()=>download(fileBase()+"-round-robin.csv",csv(rrRows()),"text/csv")},"Round robin standings"),
+        el("button",{lockReason:hasMp?null:"Match play hasn't started yet",onclick:()=>download(fileBase()+"-match-play.csv",csv(mpRows()),"text/csv")},"Match play results"))),
+    el("section",{class:"panel sec"},el("h2",{text:"Paper backup"}),
+      el("p",{class:"muted",style:"margin:0"},"If the app can't be used during an event, keep scoring on paper: the roster and round robin sheet, and a sheet for each division's bracket. Scores already entered are filled in. Print it before each event, and again when match play starts."),
+      el("div",{class:"row"},el("button",{class:"primary",onclick:()=>{S.print=true;schedule();window.scrollTo(0,0);}},"Open printable sheets")))];}
+
+function printView(){const ev=EV(),n=ev.rrSets,out=[];
+  out.push(el("div",{class:"printbar noprint"},el("button",{class:"primary",onclick:()=>window.print()},"Print"),el("button",{onclick:()=>{S.print=false;schedule();}},"Close"),
+    el("span",{class:"muted",text:"Tip: choose Portrait for the roster and Landscape if brackets look cramped."})));
+  const head=(t)=>el("div",{class:"phead"},el("div",{},el("strong",{text:ev.name||"Event"}),el("span",{text:[ev.date||"",ev.code?"Code "+ev.code:""].filter(Boolean).join(" · ")})),el("h2",{text:t}));
+  // Roster and round robin
+  const rows=ranking().slice().sort((a,b)=>(a.h.site||"").localeCompare(b.h.site||"")||a.h.name.localeCompare(b.h.name));
+  out.push(el("section",{class:"psheet"},head(`Roster and round robin · ${n} sets × ${ev.balls} balls`),
+    el("table",{class:"ptable"},el("thead",{},el("tr",{},el("th",{text:"#"}),el("th",{text:"Hitter"}),el("th",{text:"Facility"}),...[...Array(n)].map((_,i)=>el("th",{class:"num",text:"Set "+(i+1)})),el("th",{class:"num",text:"Long"}),el("th",{text:"Initials"}))),
+      el("tbody",{},...rows.map((r,i)=>el("tr",{},el("td",{text:String(i+1)}),el("td",{},el("strong",{text:r.h.name}),r.h.country?el("span",{class:"pmuted",text:" "+r.h.country}):null),el("td",{class:"pmuted",text:r.h.site||""}),
+        ...r.cells.map(c=>el("td",{class:"num box",text:c?String(c.v):""})),el("td",{class:"num box",text:r.long!=null?String(r.long):""}),el("td",{class:"box"}))))),
+    el("p",{class:"pmuted",text:"Rank by longest drive. Ties go to the next-best set. Record every set in yards."})));
+  // Brackets
+  let brackets=S.brackets&&S.brackets.length?S.brackets:null,projected=false;
+  if(!brackets){projected=true;const p=project(ranking().map(r=>r.h.id),ev.divisions);let off=0;
+    brackets=p.divs.map(d=>{const div=Object.assign({},d,{ver:"p"}),rounds=buildBracket(div),res=resolveDiv(div,rounds,false);const b={div,rounds,res,off};off+=d.seeds.length;return b;});}
+  for(const b of brackets){if(b.div.seeds.length<2)continue;
+    const label={};b.rounds.forEach(rd=>rd.matches.forEach((m,k)=>label[m.id]=`${rd.label} match ${k+1}`));
+    const who=(r,side,m)=>{const x=r?.[side],src=m[side];if(x==="BYE")return{t:"Bye"};if(x!==undefined)return{t:nameOf(x),seed:seedNo(b,x)};
+      if(src.seed)return{t:projected?"Seed "+(b.off+src.seed):"—",seed:b.off+src.seed};if(src.win)return{t:"Winner of "+label[src.win]};return{t:"—"};};
+    const blocks=b.rounds.map(rd=>el("div",{class:"pround"},el("h3",{text:rd.label}),...rd.matches.map((m,k)=>{const r=b.res[m.id],A=who(r,"a",m),B=who(r,"b",m);
+      const val=(e)=>e&&e.revealed?String(e.v):"";
+      const line=(X,e)=>el("tr",{},el("td",{class:"num pmuted",text:X.seed?String(X.seed):""}),el("td",{text:X.t}),el("td",{class:"num box",text:val(e)}),el("td",{class:"num box"}));
+      return el("table",{class:"ptable pmatch"},el("thead",{},el("tr",{},el("th",{class:"num",text:"Seed"}),el("th",{text:label[m.id]}),el("th",{class:"num",text:"Yards"}),el("th",{class:"num",text:"Rehit"}))),
+        el("tbody",{},line(A,r?.ea),line(B,r?.eb),el("tr",{},el("td",{}),el("td",{colspan:"3",class:"pmuted",text:"Winner: "+(r&&r.winner&&r.winner!=="BYE"&&(r.status==="done"||r.status==="td")?nameOf(r.winner):"________________________")}))));})));
+    out.push(el("section",{class:"psheet"},head(`${b.div.name} · match play${projected?" (projected from current standings)":""}`),
+      el("p",{class:"pmuted",text:`${shapeText(b.div.seeds.length,b.div.fill)} · ${ev.mpBalls} balls per set · longer drive advances`}),...blocks));}
+  return out;}
+
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
   const pick=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;st.busy=true;st.err="";schedule();
@@ -1278,6 +1371,7 @@ render();
   if(!db){S.noDb=true;schedule();return;}
   S.db=db;S.user=user;if(!user)S.authReady=true;
   S.role=LIF.role()||null;
+  window.addEventListener("htg-status",()=>schedule());
   window.addEventListener("htg-code-invalid",e=>{if(S.me.id)return;S.spectate=false;S.role="spectator";S.codeErr="That event code isn't active any more. Ask the director for the current one.";S.codeEntry=null;schedule();});
   if(user){try{const me=await user.me();S.me={id:me.id,isOwner:!!me.isOwner};}catch(e){}
     try{const full=await LIF.me();if(full&&!full.name)S.needName=true;}catch(e){}

@@ -19,11 +19,11 @@ const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").
 const OWNER_READ = new Set(["private"]);
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
     try {
-      return await route(req, env, url);
+      return await route(req, env, url, ctx);
     } catch (e) {
       console.error(e);
       return json({ error: "Server error" }, 500);
@@ -31,7 +31,7 @@ export default {
   },
 };
 
-async function route(req, env, url) {
+async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (m !== "GET" && m !== "HEAD") {
     // Same-origin check for anything that changes state.
@@ -39,6 +39,9 @@ async function route(req, env, url) {
     if (origin && origin !== url.origin) return json({ error: "Bad origin" }, 403);
   }
   const me = await currentUser(req, env);
+  const later = (p) => (ctx && ctx.waitUntil ? ctx.waitUntil(p) : p);
+
+  if (p === "/api/live") return live(req, env, me, url);
 
   if (p === "/api/me" && m === "GET") return json(me ? publicMe(me, env) : { id: null });
   if (p === "/api/me" && m === "POST") {
@@ -65,12 +68,14 @@ async function route(req, env, url) {
       const chunk = drop.slice(i, i + 90);
       await env.DB.prepare(`DELETE FROM sessions WHERE token_hash IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).run();
     }
+    later(notifyHub(env, { signOutOthers: true }));
     return json({ ok: true, signedOut: drop.length });
   }
   if (p === "/api/sync" && m === "GET") return sync(env, me, url);
-  if (p === "/api/doc" && (m === "PUT" || m === "DELETE")) return writeDoc(req, env, me, url);
+  if (p === "/api/doc" && (m === "PUT" || m === "DELETE")) return writeDoc(req, env, me, url, later);
   if (p === "/api/profiles" && m === "POST") return profiles(req, env, me);
-  if (p === "/api/import" && m === "POST") return importDocs(req, env, me);
+  if (p === "/api/import" && m === "POST") return importDocs(req, env, me, later);
+  if (p === "/api/backup" && m === "GET") return backup(env, me);
   return json({ error: "Not found" }, 404);
 }
 
@@ -172,6 +177,15 @@ async function currentUser(req, env) {
 
 /* ---------- documents ---------- */
 
+// Who may see a document, for a live-connection viewer {role, uid}.
+function visibleTo(path, v) {
+  const [coll, id] = path.split("/");
+  if (v.role === "owner") return true;
+  if (v.role === "spect") return SPECTATOR_READ.has(coll);
+  if (OWNER_READ.has(coll)) return false;
+  if (coll === "vault") return id === v.uid;
+  return true;
+}
 function canRead(path, me, env) {
   const [coll, id] = path.split("/");
   const owner = me && isOwnerEmail(env, me.email);
@@ -211,7 +225,7 @@ async function sync(env, me, url) {
   return json({ now, docs, me: me ? publicMe(me, env) : null, spectator });
 }
 
-async function writeDoc(req, env, me, url) {
+async function writeDoc(req, env, me, url, later) {
   const del = req.method === "DELETE";
   const b = del ? { path: url.searchParams.get("path") } : await body(req);
   const path = b.path;
@@ -225,6 +239,8 @@ async function writeDoc(req, env, me, url) {
     "INSERT INTO docs(path,coll,data,updated_at,updated_by) VALUES(?,?,?,?,?) " +
     "ON CONFLICT(path) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at, updated_by=excluded.updated_by"
   ).bind(path, path.split("/")[0], data, t, me.id).run();
+  const d = data == null ? null : JSON.parse(data);
+  later(notifyHub(env, { now: t, docs: [{ p: path, d, t }], eventCode: path === "event/main" ? (d && d.code) || "" : undefined }));
   return json({ ok: true, t });
 }
 
@@ -252,7 +268,7 @@ async function profiles(req, env, me) {
 
 // Director-only: load data exported from the earlier version of the app.
 // Body: { docs: { "<path>": data, ... }, remap: { "<old user id>": "<new user id>" } }
-async function importDocs(req, env, me) {
+async function importDocs(req, env, me, later) {
   if (!me || !isOwnerEmail(env, me.email)) return json({ error: "Director only" }, 403);
   const b = await body(req, 5_000_000);
   let text = JSON.stringify(b.docs || {});
@@ -271,6 +287,9 @@ async function importDocs(req, env, me) {
     ).bind(path, path.split("/")[0], JSON.stringify(data), t, me.id));
   }
   if (stmts.length) await env.DB.batch(stmts);
+  const now = Date.now();
+  later(notifyHub(env, { now, docs: Object.entries(docs).filter(([p]) => validPath(p)).map(([p, d]) => ({ p, d, t: now })),
+    eventCode: docs["event/main"] ? docs["event/main"].code || "" : undefined }));
   return json({ ok: true, imported: stmts.length });
 }
 
@@ -299,3 +318,89 @@ function rand(n) {
   const a = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return [...crypto.getRandomValues(new Uint8Array(n))].map((x) => a[x % a.length]).join("");
 }
+
+/* ---------- backup ---------- */
+
+// Director only: every document, in the same format the import accepts.
+async function backup(env, me) {
+  if (!me || !isOwnerEmail(env, me.email)) return json({ error: "Director only" }, 403);
+  const rs = await env.DB.prepare("SELECT path,data FROM docs WHERE data IS NOT NULL ORDER BY path").all();
+  const docs = {};
+  for (const r of rs.results || []) docs[r.path] = JSON.parse(r.data);
+  return json({ format: "letitfly-export-1", ownerId: me.id, exportedAt: new Date().toISOString(), docs });
+}
+
+/* ---------- live updates (Durable Object) ---------- */
+
+// Upgrades to a WebSocket held by the Hub. Signed-in people and spectators
+// with the current event code can connect; everyone else is refused.
+async function live(req, env, me, url) {
+  if (req.headers.get("Upgrade") !== "websocket") return json({ error: "Expected a WebSocket" }, 426);
+  let att;
+  if (me) att = { role: isOwnerEmail(env, me.email) ? "owner" : "user", uid: me.id };
+  else {
+    const code = normCode(url.searchParams.get("code"));
+    const ev = code ? await env.DB.prepare("SELECT data FROM docs WHERE path='event/main'").first() : null;
+    const evCode = ev && ev.data ? normCode(JSON.parse(ev.data).code) : "";
+    if (!code || code !== evCode) return json({ error: "Sign in or enter the event code" }, 401);
+    att = { role: "spect", code };
+  }
+  const hub = env.HUB.get(env.HUB.idFromName("main"));
+  const fwd = new Request("https://hub/connect", { headers: { Upgrade: "websocket", "X-Att": JSON.stringify(att) } });
+  return hub.fetch(fwd);
+}
+
+async function notifyHub(env, msg) {
+  if (!env.HUB) return;
+  try {
+    const hub = env.HUB.get(env.HUB.idFromName("main"));
+    await hub.fetch("https://hub/notify", { method: "POST", body: JSON.stringify(msg) });
+  } catch (e) { console.error("notify", e); }
+}
+
+export class Hub {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    // Keep-alive pings are answered without waking the object.
+    try { ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong")); } catch {}
+  }
+
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === "/connect") {
+      const att = JSON.parse(req.headers.get("X-Att") || "{}");
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.ctx.acceptWebSocket(server);
+      server.serializeAttachment(att);
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    if (url.pathname === "/notify") {
+      this.broadcast(await req.json());
+      return new Response("ok");
+    }
+    return new Response("Not found", { status: 404 });
+  }
+
+  // Sends each connected viewer only the changes they're allowed to see.
+  broadcast(msg) {
+    const docs = msg.docs || [];
+    for (const ws of this.ctx.getWebSockets()) {
+      let v = {};
+      try { v = ws.deserializeAttachment() || {}; } catch {}
+      if (msg.signOutOthers && v.role === "user") { send(ws, { type: "signedout" }); close(ws); continue; }
+      if (v.role === "spect" && msg.eventCode !== undefined && normCode(msg.eventCode) !== v.code) {
+        send(ws, { type: "codeinvalid" }); close(ws); continue;
+      }
+      const mine = docs.filter((d) => visibleTo(d.p, v));
+      if (mine.length) send(ws, { type: "docs", now: msg.now, docs: mine });
+    }
+  }
+
+  webSocketMessage(ws, m) { if (m === "ping") send(ws, "pong"); }
+  webSocketClose(ws, code, reason) { close(ws, code, reason); }
+  webSocketError(ws) { close(ws); }
+}
+function send(ws, m) { try { ws.send(typeof m === "string" ? m : JSON.stringify(m)); } catch {} }
+function close(ws, code = 1000, reason = "") { try { ws.close(code, reason); } catch {} }
