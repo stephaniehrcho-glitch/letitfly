@@ -1246,7 +1246,8 @@ function codeCard(){const ev=EV();if(!ev)return null;const code=ev.code||"";cons
   const copy=async()=>{try{await navigator.clipboard.writeText(link);toast("Link copied");}catch(e){toast(link);}};
   return el("section",{class:"panel sec"},el("h2",{text:"Spectator code"}),
     el("p",{class:"muted",style:"margin:0"},"Anyone with this code can watch the Tracker without signing in. They can't enter or change scores."),
-    el("div",{class:"codebig",text:code||"…"}),
+    el("div",{class:"row",style:"align-items:center;margin:0"},el("div",{class:"codebig",text:code||"…"}),
+      el("button",{disabled:!code,onclick:async()=>{try{await navigator.clipboard.writeText(code);toast("Code copied");}catch(e){toast(code);}}},"Copy code")),
     el("div",{class:"row",style:"flex-wrap:wrap"},el("button",{class:"primary",onclick:copy,disabled:!code},"Copy link"),
       c?el("span",{class:"row",style:"margin:0"},el("span",{class:"muted",text:"New code? The old one stops working right away."}),
           el("button",{class:"danger",onclick:()=>{S.confirm=null;saveEvent(e=>e.code=newCode(),"Reset the spectator code");}},"Reset code"),
