@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>HitTheGrid</title>
+<title>Hit The Grid</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -256,11 +256,11 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 </style>
 
 <header class="band"><div class="wrap">
-  <div class="brand"><small id="hdrSub">Long drive · Live scoring</small><h1 id="hdrName">HitTheGrid</h1></div>
+  <div class="brand"><small id="hdrSub">Long drive · Live scoring</small><h1 id="hdrName">Hit The Grid</h1></div>
   <nav class="tabs" id="tabs" aria-label="Views"></nav>
 </div></header>
 <main class="wrap" id="app">
-  <div class="panel"><h2>Loading event</h2><p class="muted">Standings and brackets appear here once the live event data loads.</p></div>
+  <div class="panel"><p class="muted" style="margin:0">Loading…</p></div>
 </main>
 <div class="toast" id="toast" hidden></div>
 
@@ -520,8 +520,12 @@ let lineT;window.addEventListener("resize",()=>{clearTimeout(lineT);lineT=setTim
 let pend=false;function schedule(){if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;render();});}
 function render(){const app=document.getElementById("app");const a=document.activeElement;const fid=a&&a.id;let sel=null;
   try{sel=[a.selectionStart,a.selectionEnd]}catch(e){}
+  renderHeader();
+  if(!S.noDb&&(!S.authReady||!S.me.id||S.needName)){
+    app.replaceChildren(S.authReady?signInBox():el("div",{class:"panel"},el("p",{class:"muted",style:"margin:0"},"Loading…")));
+    if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement)n.focus({preventScroll:true});}return;}
   if(EV())computeAll();
-  renderHeader();const v=view();app.replaceChildren(...[].concat(v==="enter"?vEnter():v==="director"?vDirector():vTracker()));
+  const v=view();app.replaceChildren(...[].concat(v==="enter"?vEnter():v==="director"?vDirector():vTracker()));
   if(S.sub&&S.sub.startsWith("rrrow:")&&S.me.isOwner&&EV()&&hitter(S.sub.slice(6)))app.append(rrRowModal(S.sub.slice(6)));
   if(S.warn)app.append(warnModal());
   if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement){n.focus({preventScroll:true});try{if(sel&&sel[0]!=null)n.setSelectionRange(sel[0],sel[1])}catch(e){}}}
@@ -530,8 +534,9 @@ function render(){const app=document.getElementById("app");const a=document.acti
     setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
   if(S.me.isOwner){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
-function renderHeader(){const ev=EV();document.getElementById("hdrName").textContent=ev?.name||"HitTheGrid";
+function renderHeader(){const gated=!S.me.id||S.needName;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
   document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
+  if(gated){document.getElementById("tabs").replaceChildren();return;}
   const tabs=[["tracker","Tracker"],["enter","Enter scores"]];if(S.me.isOwner||S.noDb)tabs.push(["director","Director"]);
   document.getElementById("tabs").replaceChildren(...tabs.map(([k,l])=>el("a",{href:"#"+k,"aria-current":view()===k?"page":null,text:l,onclick:e=>{e.preventDefault();goView(k);}})),
     S.me.id?el("a",{href:"#",class:"acct",text:"Sign out",onclick:async e=>{e.preventDefault();try{await LIF.logout()}catch(x){}location.hash="#tracker";location.reload();}})
@@ -648,7 +653,7 @@ function matchCard(r,seedOf,ph){if(!r)return el("div",{class:"match"});
 /* ---------- ENTER ---------- */
 function vEnter(){const ev=EV(),out=[el("div",{class:"sechead"},el("h2",{text:"Enter scores"}))];
   const msg=(t)=>{out.push(el("div",{class:"panel"},el("p",{style:"margin:0"},t)));return out;};
-  if(S.noDb)return msg("Couldn't reach HitTheGrid. Check your connection and reload.");
+  if(S.noDb)return msg("Couldn't reach Hit The Grid. Check your connection and reload.");
   if(!S.me.id||S.needName){out.push(signInBox());return out;}
   if(S.canWrite===false)return msg("You have view-only access to this event. Ask the director to give you Contributor access so you can enter scores.");
   if(!ev)return msg("The director hasn't set up this event yet.");
@@ -1180,11 +1185,12 @@ function signInBox(){const L=S.login=S.login||{step:S.needName?"name":"email",em
   const enter=f=>e=>{if(e.key==="Enter"){e.preventDefault();f();}};
   const box=[];
   if(L.step==="email"){
-    box.push(el("h3",{text:"Sign in to enter scores"}),el("p",{class:"muted",style:"margin:0"},"We'll email you a 6-digit code. No password and no app to install. You can watch the Tracker without signing in."),
+    box.push(el("h3",{text:"Sign in"}),el("p",{class:"muted",style:"margin:0"},"Sign in to follow the event and enter scores. We'll email you a 6-digit code. No password and no app to install."),
       el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"li_email",type:"email",autocomplete:"email",inputmode:"email",placeholder:"you@email.com",value:L.email,style:"flex:1 1 220px",oninput:e=>L.email=e.target.value,onkeydown:enter(send)}),
         el("button",{class:"primary",disabled:L.busy,onclick:send},L.busy?"Sending…":"Email me a code")));
   }else if(L.step==="code"){
     box.push(el("h3",{text:"Check your email"}),el("p",{class:"muted",style:"margin:0"},"Enter the 6-digit code we sent to ",el("strong",{text:L.email}),". It expires in 10 minutes."),
+      el("p",{class:"muted",style:"margin:0"},"It comes from ",el("strong",{text:"login@hitthegrid.app"}),". Don't see it within a minute? Check your spam or junk folder."),
       L.devCode?el("div",{class:"note warn"},"Testing mode, no email service yet. Your code is ",el("strong",{class:"mono",text:L.devCode})):null,
       el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"li_code",inputmode:"numeric",autocomplete:"one-time-code",maxlength:"6",placeholder:"123456",value:L.code,style:"flex:0 1 160px;letter-spacing:.2em;font-family:var(--f-mono)",oninput:e=>L.code=e.target.value,onkeydown:enter(verify)}),
         el("button",{class:"primary",disabled:L.busy,onclick:verify},L.busy?"Checking…":"Sign in"),
@@ -1201,7 +1207,7 @@ function signInBox(){const L=S.login=S.login||{step:S.needName?"name":"email",em
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
   const pick=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;st.busy=true;st.err="";schedule();
-    try{const j=JSON.parse(await f.text());if(!j.docs)throw new Error("That file isn't a HitTheGrid export.");
+    try{const j=JSON.parse(await f.text());if(!j.docs)throw new Error("That file isn't an export from the earlier version.");
       const remap=j.ownerId?{[j.ownerId]:S.me.id}:{};const r=await LIF.importDocs(j.docs,remap);st.done=`Imported ${r.imported} records. Reloading…`;schedule();setTimeout(()=>location.reload(),1200);}
     catch(x){st.err=x.message||"Import failed";st.busy=false;schedule();}};
   return el("section",{class:"panel sec"},el("h2",{text:"Bring over your existing data"}),
@@ -1216,9 +1222,10 @@ render();
 (async()=>{const c=window.claude;if(!c||!c.use){S.noDb=true;schedule();return;}
   const [db,user]=await Promise.all([c.use("db"),c.use("user")]);
   if(!db){S.noDb=true;schedule();return;}
-  S.db=db;S.user=user;
+  S.db=db;S.user=user;if(!user)S.authReady=true;
   if(user){try{const me=await user.me();S.me={id:me.id,isOwner:!!me.isOwner};}catch(e){}
     try{const full=await LIF.me();if(full&&!full.name)S.needName=true;}catch(e){}
+    S.authReady=true;schedule();
     if(!S.me.isOwner){try{S.me.isOwner=!!(await user.isOwner());}catch(e){}}
     if(!S.me.id){let tries=0;const retry=async()=>{let id=null;try{id=await user.id();}catch(e){}
         if(id){S.me.id=id;schedule();}else if(++tries<6)setTimeout(retry,2500);};

@@ -93,7 +93,7 @@ async function authStart(req, env) {
 }
 
 async function sendCode(env, email, code) {
-  const app = env.APP_NAME || "HitTheGrid";
+  const app = env.APP_NAME || "Hit The Grid";
   const from = env.FROM_EMAIL || `${app} <login@hitthegrid.app>`;
   const html = `<div style="font-family:system-ui,sans-serif;font-size:16px;color:#13201a">
     <p>Your ${app} sign-in code is</p>
@@ -165,6 +165,8 @@ function canWrite(path, me, env) {
 const validPath = (p) => typeof p === "string" && /^[A-Za-z0-9_-]{1,40}\/[A-Za-z0-9_.:~#-]{1,120}$/.test(p);
 
 async function sync(env, me, url) {
+  // Nothing about the event is visible until someone signs in.
+  if (!me) return json({ now: Date.now(), docs: [], me: null });
   const since = Math.max(0, Number(url.searchParams.get("since")) || 0);
   const now = Date.now();
   const rs = await env.DB.prepare("SELECT path,data,updated_at FROM docs WHERE updated_at>? ORDER BY updated_at")
@@ -201,6 +203,7 @@ async function nextStamp(env) {
 }
 
 async function profiles(req, env, me) {
+  if (!me) return json({});
   const ids = [].concat((await body(req)).ids || []).filter((x) => typeof x === "string").slice(0, 500);
   if (!ids.length) return json({});
   const owner = me && isOwnerEmail(env, me.email);

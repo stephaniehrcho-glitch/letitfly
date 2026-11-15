@@ -24,11 +24,11 @@
     }
   ],
   "vars": {
-    "APP_NAME": "HitTheGrid",
+    "APP_NAME": "Hit The Grid",
     // Comma-separated emails that get the Director tab.
     "OWNER_EMAILS": "stephanie.hr.cho@gmail.com",
     // Sender for sign-in codes once Resend is set up, e.g. "HitTheGrid <login@hitthegrid.app>".
-    "FROM_EMAIL": "HitTheGrid <login@hitthegrid.app>",
+    "FROM_EMAIL": "Hit The Grid <login@hitthegrid.app>",
     // "1" shows sign-in codes on screen when no email service is configured. Testing only.
     "DEV_SHOW_CODES": "0"
   },

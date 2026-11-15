@@ -31,7 +31,7 @@ Runs on Cloudflare Workers with a D1 database. Hitters and scorekeepers sign in 
 
 ## Who can do what
 
-- **Anyone with the link:** watch the Tracker (standings and brackets).
+- **Anyone without an account:** sees only the Hit The Grid sign-in screen. No event details are shown or sent until they sign in.
 - **Signed-in hitters and scorekeepers:** request access, then enter scores for the hitters the director assigns them (their own facility by default).
 - **Director (`OWNER_EMAILS`):** everything, including the Hitter and Facility libraries, which stay private to the director.
 
