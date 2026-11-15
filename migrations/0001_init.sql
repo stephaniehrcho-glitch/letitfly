@@ -1,4 +1,4 @@
--- LetItFly: accounts, email login codes, sessions, and the event document store.
+-- HitTheGrid: accounts, email login codes, sessions, and the event document store.
 
 CREATE TABLE IF NOT EXISTS users (
   id          TEXT PRIMARY KEY,

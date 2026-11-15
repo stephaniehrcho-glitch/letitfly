@@ -1,9 +1,14 @@
 {
-  // Cloudflare Worker for LetItFly: serves /public and the /api routes.
+  // Cloudflare Worker for HitTheGrid: serves /public and the /api routes.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "letitfly",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
+  // Internal names stay "letitfly"; the public address is hitthegrid.app.
+  "routes": [
+    { "pattern": "hitthegrid.app", "custom_domain": true },
+    { "pattern": "www.hitthegrid.app", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -19,10 +24,10 @@
     }
   ],
   "vars": {
-    "APP_NAME": "LetItFly",
+    "APP_NAME": "HitTheGrid",
     // Comma-separated emails that get the Director tab.
     "OWNER_EMAILS": "stephanie.hr.cho@gmail.com",
-    // Sender for sign-in codes once Resend is set up, e.g. "LetItFly <login@letitfly.com>".
+    // Sender for sign-in codes once Resend is set up, e.g. "HitTheGrid <login@hitthegrid.app>".
     "FROM_EMAIL": "",
     // "1" shows sign-in codes on screen when no email service is configured. Testing only.
     "DEV_SHOW_CODES": "1"

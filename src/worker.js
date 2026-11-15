@@ -1,4 +1,4 @@
-// LetItFly API worker: email one-time-code sign-in, sessions, and a small
+// HitTheGrid API worker: email one-time-code sign-in, sessions, and a small
 // JSON document store (D1) with per-path read/write rules. Static files in
 // /public are served by Cloudflare's asset handler before this code runs.
 
@@ -93,8 +93,8 @@ async function authStart(req, env) {
 }
 
 async function sendCode(env, email, code) {
-  const app = env.APP_NAME || "LetItFly";
-  const from = env.FROM_EMAIL || `${app} <login@letitfly.com>`;
+  const app = env.APP_NAME || "HitTheGrid";
+  const from = env.FROM_EMAIL || `${app} <login@hitthegrid.app>`;
   const html = `<div style="font-family:system-ui,sans-serif;font-size:16px;color:#13201a">
     <p>Your ${app} sign-in code is</p>
     <p style="font-size:32px;font-weight:700;letter-spacing:6px;margin:8px 0">${code}</p>

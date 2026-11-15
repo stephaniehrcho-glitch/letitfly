@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>LetItFly</title>
+<title>HitTheGrid</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -256,7 +256,7 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 </style>
 
 <header class="band"><div class="wrap">
-  <div class="brand"><small id="hdrSub">Long drive · Live scoring</small><h1 id="hdrName">LetItFly</h1></div>
+  <div class="brand"><small id="hdrSub">Long drive · Live scoring</small><h1 id="hdrName">HitTheGrid</h1></div>
   <nav class="tabs" id="tabs" aria-label="Views"></nav>
 </div></header>
 <main class="wrap" id="app">
@@ -530,7 +530,7 @@ function render(){const app=document.getElementById("app");const a=document.acti
     setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
   if(S.me.isOwner){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
-function renderHeader(){const ev=EV();document.getElementById("hdrName").textContent=ev?.name||"LetItFly";
+function renderHeader(){const ev=EV();document.getElementById("hdrName").textContent=ev?.name||"HitTheGrid";
   document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
   const tabs=[["tracker","Tracker"],["enter","Enter scores"]];if(S.me.isOwner||S.noDb)tabs.push(["director","Director"]);
   document.getElementById("tabs").replaceChildren(...tabs.map(([k,l])=>el("a",{href:"#"+k,"aria-current":view()===k?"page":null,text:l,onclick:e=>{e.preventDefault();goView(k);}})),
@@ -648,7 +648,7 @@ function matchCard(r,seedOf,ph){if(!r)return el("div",{class:"match"});
 /* ---------- ENTER ---------- */
 function vEnter(){const ev=EV(),out=[el("div",{class:"sechead"},el("h2",{text:"Enter scores"}))];
   const msg=(t)=>{out.push(el("div",{class:"panel"},el("p",{style:"margin:0"},t)));return out;};
-  if(S.noDb)return msg("Couldn't reach LetItFly. Check your connection and reload.");
+  if(S.noDb)return msg("Couldn't reach HitTheGrid. Check your connection and reload.");
   if(!S.me.id||S.needName){out.push(signInBox());return out;}
   if(S.canWrite===false)return msg("You have view-only access to this event. Ask the director to give you Contributor access so you can enter scores.");
   if(!ev)return msg("The director hasn't set up this event yet.");
@@ -1201,7 +1201,7 @@ function signInBox(){const L=S.login=S.login||{step:S.needName?"name":"email",em
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
   const pick=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;st.busy=true;st.err="";schedule();
-    try{const j=JSON.parse(await f.text());if(!j.docs)throw new Error("That file isn't a LetItFly export.");
+    try{const j=JSON.parse(await f.text());if(!j.docs)throw new Error("That file isn't a HitTheGrid export.");
       const remap=j.ownerId?{[j.ownerId]:S.me.id}:{};const r=await LIF.importDocs(j.docs,remap);st.done=`Imported ${r.imported} records. Reloading…`;schedule();setTimeout(()=>location.reload(),1200);}
     catch(x){st.err=x.message||"Import failed";st.busy=false;schedule();}};
   return el("section",{class:"panel sec"},el("h2",{text:"Bring over your existing data"}),

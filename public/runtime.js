@@ -1,4 +1,4 @@
-// Browser side of LetItFly's data layer. Gives the app the same small API it
+// Browser side of HitTheGrid's data layer. Gives the app the same small API it
 // used before (db.doc/collection with onSnapshot, user.me/profiles), backed by
 // the /api routes. Changes from other devices arrive by polling /api/sync.
 (function () {

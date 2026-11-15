@@ -1,4 +1,6 @@
-# LetItFly
+# HitTheGrid
+
+Live at **https://hitthegrid.app**. (The Worker and database are named `letitfly` internally; that name isn't shown to users.)
 
 Live scoring for long drive events: round robin, divisions, seeded match play with sealed head-to-head entries, and a live Tracker anyone can watch.
 
@@ -24,7 +26,7 @@ Runs on Cloudflare Workers with a D1 database. Hitters and scorekeepers sign in 
 
    To deploy without a new commit: GitHub → Actions → Deploy to Cloudflare → Run workflow.
 4. **Email sign-in codes.** Until email is set up, you can test with on-screen codes: set `DEV_SHOW_CODES` to `"1"` in `wrangler.jsonc`. **Turn it back to `"0"` before sharing the link**, because anyone could sign in as anyone while it's on.
-   For real emails: create a free [Resend](https://resend.com) account, verify your domain, create an API key, then in Cloudflare → your `letitfly` Worker → Settings → Variables and Secrets → add a **Secret** named `RESEND_API_KEY`. Set `FROM_EMAIL` in `wrangler.jsonc`, e.g. `LetItFly <login@letitfly.com>`.
+   For real emails: create a free [Resend](https://resend.com) account, verify your domain, create an API key, then in Cloudflare → your `letitfly` Worker → Settings → Variables and Secrets → add a **Secret** named `RESEND_API_KEY`. Set `FROM_EMAIL` in `wrangler.jsonc`, e.g. `HitTheGrid <login@hitthegrid.app>`.
 5. **Bring over your data.** Sign in with the director email, open Director, and use **Bring over your existing data** with the export file from the earlier version.
 
 ## Who can do what
