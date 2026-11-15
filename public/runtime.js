@@ -12,7 +12,7 @@
   let code = null;
   try {
     const q = new URLSearchParams(location.search).get("event");
-    if (q) { store_.set("htg_code", q.toUpperCase()); history.replaceState(null, "", location.pathname + location.hash); }
+    if (q) { store_.set("htg_code", q); history.replaceState(null, "", location.pathname + location.hash); }
   } catch {}
   code = store_.get("htg_code");
 
@@ -136,7 +136,7 @@
     getCode: () => code,
     // Checks a spectator code against the server, then remembers it on this device.
     useCode: async (c) => {
-      const clean = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const clean = String(c || "").trim();
       await api("/api/sync?since=" + Date.now() + "&code=" + encodeURIComponent(clean));
       store_.set("htg_code", clean); code = clean;
     },

@@ -256,7 +256,7 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .roles{display:grid;gap:10px;margin-top:4px}
 .rolebtn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px;border-radius:10px;font-size:15px}
 .rolebtn strong{font-size:16px}.rolebtn span{font-weight:400;font-size:13px}
-.codebig{font-family:var(--f-mono);font-size:34px;font-weight:700;letter-spacing:.18em;padding:6px 0}
+.codebig{font-family:var(--f-mono);font-size:30px;font-weight:700;letter-spacing:.04em;padding:6px 0}
 </style>
 
 <header class="band"><div class="wrap">
@@ -1232,27 +1232,29 @@ function codeBox(){const C=S.codeEntry=S.codeEntry||{code:"",err:S.codeErr||"",b
     try{await LIF.useCode(C.code);S.spectate=true;location.hash="#tracker";location.reload();}catch(e){C.err=e.message||"That code didn't work";C.busy=false;schedule();}};
   return el("section",{class:"panel sec"},el("h3",{text:"Enter the event code"}),
     el("p",{class:"muted",style:"margin:0"},"The event director shares a short code, on a sign at the facility or in a message. Enter it to follow the event live."),
-    el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"ev_code",autocomplete:"off",autocapitalize:"characters",placeholder:"e.g. K7Q4MP",value:C.code,maxlength:"12",
-        style:"flex:0 1 200px;letter-spacing:.15em;text-transform:uppercase;font-family:var(--f-mono)",oninput:e=>C.code=e.target.value,onkeydown:e=>{if(e.key==="Enter"){e.preventDefault();go();}}}),
+    el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"ev_code",autocomplete:"off",autocapitalize:"characters",placeholder:"e.g. Nov10-2026-1",value:C.code,maxlength:"20",
+        style:"flex:0 1 220px;letter-spacing:.05em;font-family:var(--f-mono)",oninput:e=>C.code=e.target.value,onkeydown:e=>{if(e.key==="Enter"){e.preventDefault();go();}}}),
       el("button",{class:"primary",disabled:C.busy,onclick:go},C.busy?"Checking…":"View event")),
     C.err?el("div",{class:"note bad",text:C.err}):null,
     el("div",{class:"row"},el("button",{class:"ghost",onclick:()=>{S.role=null;LIF.role(null);C.err="";schedule();}},"← Back")));}
 
 /* ---------- director: spectator code card ---------- */
-const CODE_ABC="ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const newCode=()=>Array.from(crypto.getRandomValues(new Uint8Array(6)),x=>CODE_ABC[x%CODE_ABC.length]).join("");
+// Spectator codes follow the event date: Nov10-2026-1, then -2 for a second event that day.
+function codePrefix(d){const x=new Date((d||new Date().toISOString().slice(0,10))+"T12:00");return x.toLocaleString("en-US",{month:"short"})+x.getDate()+"-"+x.getFullYear();}
+function makeCode(ev){const pre=codePrefix(ev.date);const used=(S.lib?.usedCodes||[]).filter(c=>c!==ev.code);let n=1;while(used.includes(pre+"-"+n))n++;return pre+"-"+n;}
+// Director only: give the event a code, and keep it in step with the date until round robin starts.
+function ensureCode(){const ev=EV();if(!S.me.isOwner||!ev||!S.libLoaded||!S.lib||S.codeBusy)return;
+  const stale=!ev.code||!/^[A-Z][a-z]{2}\d{1,2}-\d{4}-\d+$/.test(ev.code)||(ev.phase==="setup"&&!ev.code.startsWith(codePrefix(ev.date)+"-"));if(!stale)return;
+  const code=makeCode(ev),old=ev.code;S.codeBusy=true;
+  Promise.all([saveEvent(e=>{e.code=code;}),saveLib(l=>{l.usedCodes=(l.usedCodes||[]).filter(c=>c!==old).concat(code);})]).finally(()=>{S.codeBusy=false;});}
 function codeCard(){const ev=EV();if(!ev)return null;const code=ev.code||"";const link=location.origin+"/?event="+code;
-  const c=S.confirm&&S.confirm.k==="resetcode";
   const copy=async()=>{try{await navigator.clipboard.writeText(link);toast("Link copied");}catch(e){toast(link);}};
   return el("section",{class:"panel sec"},el("h2",{text:"Spectator code"}),
-    el("p",{class:"muted",style:"margin:0"},"Anyone with this code can watch the Tracker without signing in. They can't enter or change scores."),
+    el("p",{class:"muted",style:"margin:0"},"Anyone with this code can watch the Tracker without signing in. They can't enter or change scores. The code follows the event date and is set once the round robin starts."),
     el("div",{class:"row",style:"align-items:center;margin:0"},el("div",{class:"codebig",text:code||"…"}),
       el("button",{disabled:!code,onclick:async()=>{try{await navigator.clipboard.writeText(code);toast("Code copied");}catch(e){toast(code);}}},"Copy code")),
     el("div",{class:"row",style:"flex-wrap:wrap"},el("button",{class:"primary",onclick:copy,disabled:!code},"Copy link"),
-      c?el("span",{class:"row",style:"margin:0"},el("span",{class:"muted",text:"New code? The old one stops working right away."}),
-          el("button",{class:"danger",onclick:()=>{S.confirm=null;saveEvent(e=>e.code=newCode(),"Reset the spectator code");}},"Reset code"),
-          el("button",{class:"ghost",onclick:()=>{S.confirm=null;schedule();}},"Cancel"))
-        :el("button",{class:"ghost",onclick:()=>{S.confirm={k:"resetcode"};schedule();}},"Reset code")),
+),
     el("p",{class:"muted mono",style:"margin:0;font-size:12px;word-break:break-all",text:link}));}
 
 /* ---------- import from the earlier version ---------- */
@@ -1287,10 +1289,10 @@ render();
   const timer=setTimeout(()=>{S.stale=true;S.loaded=true;schedule();},10000);
   const err=e=>{console.warn(e);schedule();};
   db.doc("event/main").onSnapshot(s=>{S.event=s.exists?s.data():null;S.loaded=true;
-    if(S.me.isOwner&&S.event&&!S.event.code&&!s.metadata.fromCache&&!S.codeMade){S.codeMade=true;saveEvent(e=>{if(!e.code)e.code=newCode();});}if(!s.metadata.fromCache){clearTimeout(timer);S.stale=false;}schedule();},e=>{clearTimeout(timer);S.loaded=true;err(e)});
+    if(!s.metadata.fromCache)ensureCode();if(!s.metadata.fromCache){clearTimeout(timer);S.stale=false;}schedule();},e=>{clearTimeout(timer);S.loaded=true;err(e)});
   db.doc("admin/state").onSnapshot(s=>{S.admin=s.exists?s.data():{};schedule();},err);
   db.doc("private/hitters").onSnapshot(s=>{S.priv=s.exists?s.data():(S.me.isOwner?{emails:{}}:null);S.privLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
-  db.doc("private/library").onSnapshot(s=>{S.lib=s.exists?s.data():(S.me.isOwner?{hitters:{}}:null);S.libLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
+  db.doc("private/library").onSnapshot(s=>{setTimeout(ensureCode,0);S.lib=s.exists?s.data():(S.me.isOwner?{hitters:{}}:null);S.libLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
   for(const col of ["joins","rr","commits","reveals"])db.collection(col).onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S[col]=o;schedule();},err);
   db.collection("vault").onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S.vault=o;schedule();},err);
   schedule();})();

@@ -3,7 +3,8 @@
 // /public are served by Cloudflare's asset handler before this code runs.
 
 const SESSION_COOKIE = "lif_s";
-const SESSION_DAYS = 60;
+const SESSION_DAYS = 60;   // signed out only after this many days without using the app
+const COOKIE_DAYS = 400;   // browser cookie lifetime (the most browsers allow)
 const CODE_MINUTES = 10;
 const CODE_RESEND_SECONDS = 30;
 const MAX_CODE_ATTEMPTS = 5;
@@ -13,7 +14,7 @@ const MAX_DOC_BYTES = 900_000;
 const SELF_WRITE = new Set(["joins", "rr", "commits", "reveals", "vault"]);
 // What a spectator with the event code can read: enough to draw the Tracker.
 const SPECTATOR_READ = new Set(["event", "admin", "rr", "commits", "reveals"]);
-const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24);
 // Collections only the director can read (vault: director, or the owner of that doc).
 const OWNER_READ = new Set(["private"]);
 
@@ -138,16 +139,24 @@ async function authVerify(req, env, url) {
   await env.DB.prepare("DELETE FROM sessions WHERE expires_at<?").bind(now).run();
   const secure = url.protocol === "https:" ? "; Secure" : "";
   return json(publicMe(user, env), 200, {
-    "Set-Cookie": `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly${secure}; SameSite=Lax`,
+    "Set-Cookie": `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${COOKIE_DAYS * 86400}; HttpOnly${secure}; SameSite=Lax`,
   });
 }
 
 async function currentUser(req, env) {
   const t = cookie(req, SESSION_COOKIE);
   if (!t) return null;
-  return await env.DB.prepare(
-    "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?"
-  ).bind(await sha(t), Date.now()).first();
+  const h = await sha(t), now = Date.now();
+  const row = await env.DB.prepare(
+    "SELECT u.*, s.expires_at AS s_exp FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?"
+  ).bind(h, now).first();
+  if (!row) return null;
+  // Sliding sign-in: anyone using the app keeps being renewed, so nobody is
+  // signed out mid-event. Only 60 days without opening the app ends a session.
+  if (row.s_exp - now < (SESSION_DAYS - 1) * 86_400_000)
+    await env.DB.prepare("UPDATE sessions SET expires_at=? WHERE token_hash=?").bind(now + SESSION_DAYS * 86_400_000, h).run();
+  const { s_exp, ...user } = row;
+  return user;
 }
 
 /* ---------- documents ---------- */
