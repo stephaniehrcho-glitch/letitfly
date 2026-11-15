@@ -1,10 +1,10 @@
 {
   // Cloudflare Worker for HitTheGrid: serves /public and the /api routes.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "letitfly",
+  "name": "hitthegrid",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
-  // Internal names stay "letitfly"; the public address is hitthegrid.app.
+  // The D1 database keeps its original name, "letitfly".
   "routes": [
     { "pattern": "hitthegrid.app", "custom_domain": true },
     { "pattern": "www.hitthegrid.app", "custom_domain": true }
