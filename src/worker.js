@@ -232,6 +232,10 @@ async function writeDoc(req, env, me, url, later) {
   if (!validPath(path)) return json({ error: "Bad path" }, 400);
   if (!me) return json({ error: "Sign in first" }, 401);
   if (!canWrite(path, me, env)) return json({ error: "Not allowed" }, 403);
+  if (!del && STAMPED.has(path.split("/")[0])) {
+    const old = await env.DB.prepare("SELECT data FROM docs WHERE path=?").bind(path).first();
+    stampEntries(b.data, old && old.data ? JSON.parse(old.data) : null, req);
+  }
   const data = del ? null : JSON.stringify(b.data ?? {});
   if (data && data.length > MAX_DOC_BYTES) return json({ error: "Document too large" }, 413);
   const t = await nextStamp(env);
@@ -291,6 +295,42 @@ async function importDocs(req, env, me, later) {
   later(notifyHub(env, { now, docs: Object.entries(docs).filter(([p]) => validPath(p)).map(([p, d]) => ({ p, d, t: now })),
     eventCode: docs["event/main"] ? docs["event/main"].code || "" : undefined }));
   return json({ ok: true, imported: stmts.length });
+}
+
+/* ---------- entry arrival stamps ---------- */
+
+// Score entries (objects with a typed time "at" and a value "v" or sealed hash
+// "h") get server-side stamps the phone can't fake:
+//   rt   when the server received it
+//   off  1 if the phone couldn't send it at first (connection problem)
+//   qd   how long it waited on the phone, in ms (measured on the phone's own
+//        clock, so a wrong phone clock doesn't matter)
+// Entries already on the server keep their original stamps.
+const STAMPED = new Set(["rr", "commits"]);
+function stampEntries(doc, oldDoc, req) {
+  const now = Date.now();
+  const held = req.headers.get("X-Held") === "1";
+  const clientNow = Number(req.headers.get("X-Client-Now")) || 0;
+  const known = new Map();
+  const id = (o) => `${o.at}|${o.v ?? ""}|${o.h ?? ""}`;
+  const isEntry = (o) => o && typeof o === "object" && !Array.isArray(o) && typeof o.at === "number" && ("v" in o || "h" in o);
+  const walk = (o, fn) => {
+    if (!o || typeof o !== "object") return;
+    if (isEntry(o)) fn(o);
+    for (const k in o) if (o[k] && typeof o[k] === "object") walk(o[k], fn);
+  };
+  walk(oldDoc, (o) => known.set(id(o), o));
+  walk(doc, (o) => {
+    const prev = known.get(id(o));
+    delete o.rt; delete o.off; delete o.qd;
+    if (prev) {
+      if (prev.rt) o.rt = prev.rt;
+      if (prev.off) { o.off = prev.off; o.qd = prev.qd; }
+    } else {
+      o.rt = now;
+      if (held) { o.off = 1; o.qd = clientNow ? Math.max(0, Math.min(clientNow - o.at, 7 * 86_400_000)) : 0; }
+    }
+  });
 }
 
 /* ---------- helpers ---------- */

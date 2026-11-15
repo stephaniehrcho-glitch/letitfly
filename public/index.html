@@ -275,6 +275,9 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
   .psheet{border:0;border-radius:0;padding:0;margin:0;break-after:page}
   .psheet:last-child{break-after:auto}
 }
+.flagdot{display:inline-block;min-width:15px;height:15px;line-height:15px;border-radius:8px;font-size:10px;font-weight:700;text-align:center;margin-left:3px;cursor:pointer;color:#fff;vertical-align:middle}
+.flagdot.conf{background:var(--bad)}.flagdot.late{background:#b7791f}
+.aside{display:flex;gap:8px;align-items:center;flex-basis:100%;padding:6px 0 0;flex-wrap:wrap}
 </style>
 
 <header class="band"><div class="wrap">
@@ -367,8 +370,11 @@ function countrySelect(id,value,onchange,label){ALLSORT=ALLSORT||CC.slice().sort
 
 /* ---------- round robin ---------- */
 function rrCell(hid,i){const o=S.admin?.rr?.[hid]?.[i];if(typeof o==="number")return{v:o,src:"td"};
-  let best=null;for(const [u,d] of Object.entries(S.rr)){if(!assigned(u,hid))continue;const c=d?.e?.[nk(hid)]?.[i];
-    if(c&&typeof c.v==="number"&&(!best||c.at>best.at))best={v:c.v,at:c.at,uid:u,src:"entry",edited:!!(c.hist&&c.hist.length)};}
+  let best=null;const all=[];for(const [u,d] of Object.entries(S.rr)){if(!assigned(u,hid))continue;const c=d?.e?.[nk(hid)]?.[i];
+    if(c&&typeof c.v==="number"){all.push({u,v:c.v,at:c.at,off:c.off,qd:c.qd});
+      if(!best||c.at>best.at)best={v:c.v,at:c.at,uid:u,src:"entry",edited:!!(c.hist&&c.hist.length),off:c.off,qd:c.qd};}}
+  // Two people entered different numbers for the same set: flag it for the director.
+  if(best){const other=all.filter(x=>x.u!==best.uid&&x.v!==best.v);if(other.length)best.conflict=other;}
   return best;}
 function ranking(){const ev=EV();if(!ev)return[];const n=ev.rrSets;
   const rows=ev.hitters.filter(h=>h.status!=="withdrawn").map(h=>{const cells=[...Array(n)].map((_,i)=>rrCell(h.id,i));
@@ -411,15 +417,25 @@ function buildBracket(div){const N=div.seeds.length,ver=div.ver||"t",rounds=[];i
 const mkey=id=>EK()+id+"#"+((EV()?.rehits||{})[id]||0);
 function aheadOf(hid){const out={};for(const [u,d] of Object.entries(S.commits)){if(!assigned(u,hid))continue;
   for(const [k,c] of Object.entries(d?.ahead?.[nk(hid)]||{}))if(c&&c.h&&(!out[k]||c.at<out[k].c.at))out[k]={u,c};}return out;}
+// Sealed entries: the one the server received first counts. (rt is stamped by
+// the server on arrival; older entries without it fall back to the typed time.)
+const ordT=c=>c.rt??c.at;
 function pickEntry(key,hid,idx){let d=null,a=null;
   for(const [u,doc] of Object.entries(S.commits)){if(!assigned(u,hid))continue;
-    const c=doc?.m?.[key]?.[hid];if(c&&c.h&&(!d||c.at<d.c.at))d={u,c};
-    if(idx!=null){const x=doc?.ahead?.[nk(hid)]?.[idx];if(x&&x.h&&(!a||x.at<a.c.at))a={u,c:x};}}
-  return a&&(!d||a.c.at<=d.c.at)?Object.assign(a,{ahead:true}):d;}
+    const c=doc?.m?.[key]?.[hid];if(c&&c.h&&(!d||ordT(c)<ordT(d.c)))d={u,c};
+    if(idx!=null){const x=doc?.ahead?.[nk(hid)]?.[idx];if(x&&x.h&&(!a||ordT(x)<ordT(a.c)))a={u,c:x};}}
+  return a&&(!d||ordT(a.c)<=ordT(d.c))?Object.assign(a,{ahead:true}):d;}
+// Sealed entries for this match and hitter that didn't count because another arrived first.
+function asideFor(key,hid,chosenU){const out=[];if(!key)return out;
+  for(const [u,doc] of Object.entries(S.commits)){if(u===chosenU||!assigned(u,hid))continue;const c=doc?.m?.[key]?.[hid];if(!c||!c.h)continue;
+    const v=S.reveals[u]?.m?.[key]?.[hid]?.v??S.vault[u]?.m?.[key]?.[hid]?.v;out.push({u,c,v,key,hid});}
+  return out;}
+const heldText=c=>c&&c.off?`held ${durText(c.qd||0)} with no connection`:"";
+function durText(ms){const s=Math.round(ms/1000);if(s<60)return s+" sec";const m=Math.round(s/60);if(m<60)return m+" min";const h=Math.floor(m/60);return h+" hr"+(m%60?" "+(m%60)+" min":"");}
 function entryFor(key,hid,idx){const best=pickEntry(key,hid,idx);const ovr=S.admin?.mpVal?.[key]?.[hid];
   if(typeof ovr==="number")return{committed:true,revealed:true,v:ovr,src:"td",uid:best?.u,at:best?.c?.at,ahead:best&&best.ahead?idx:undefined};
   if(!best)return{committed:false};
-  const base={committed:true,at:best.c.at,uid:best.u};let r,str;
+  const base={committed:true,at:best.c.at,uid:best.u,off:best.c.off,qd:best.c.qd,rt:best.c.rt};let r,str;
   if(best.ahead){base.ahead=idx;r=S.reveals[best.u]?.ahead?.[nk(hid)]?.[idx];if(!r){S.aheadUse.push({u:best.u,hid,idx,key});return base;}str=`ahead|${hid}|${idx}|${r.v}|${r.s}`;}
   else{r=S.reveals[best.u]?.m?.[key]?.[hid];if(!r)return base;str=`${key}|${hid}|${r.v}|${r.s}`;}
   const hv=hashOf(str);if(hv==null)return base;if(hv!==best.c.h)return Object.assign(base,{bad:true});
@@ -637,7 +653,9 @@ function standings(){const ev=EV(),rows=ranking(),n=ev.rrSets;
   const body=rows.map((r,i)=>el("tr",{class:starts.has(i)?"cut":null},
     el("td",{class:"num"},el("span",{class:"rank",text:r.rank})),
     el("td",{},flc(r.h.country),r.h.name,r.h.site?el("span",{class:"muted small",text:" · "+r.h.site}):null,r.tie?el("span",{class:"chip bad review",text:"Review – no tiebreaker",onclick:()=>toast(`Tied on every set with ${(r.tieWith||[]).join(", ")}. Nothing breaks this tie, so the director needs to decide the order.`)}):null),
-    r.cells.map((c,ci)=>el("td",{class:"num",onclick:c?()=>toast((r.tbCells.has(ci)?"Broke a tie on Long · ":"")+(c.src==="td"?"Set by the director":(c.edited?"Edited ":"Submitted ")+tstr(c.at))):null},c?(r.tbCells.has(ci)?el("span",{class:"tb",text:fmt(c.v)}):fmt(c.v)):el("span",{class:"muted",text:"—"}),c&&c.src==="td"?el("span",{class:"muted small",text:" ✎"}):null)),
+    r.cells.map((c,ci)=>el("td",{class:"num",onclick:c?()=>toast((r.tbCells.has(ci)?"Broke a tie on Long · ":"")+(c.src==="td"?"Set by the director":(c.edited?"Edited ":"Submitted ")+tstr(c.at))):null},c?(r.tbCells.has(ci)?el("span",{class:"tb",text:fmt(c.v)}):fmt(c.v)):el("span",{class:"muted",text:"—"}),c&&c.src==="td"?el("span",{class:"muted small",text:" ✎"}):null,
+      S.me.isOwner&&c&&c.conflict?el("span",{class:"flagdot conf",title:"Different numbers entered",onclick:e=>{e.stopPropagation();toast(`Counted: ${fmt(c.v)} by ${pname(c.uid)}. Also entered: ${c.conflict.map(x=>`${fmt(x.v)} by ${pname(x.u)}${x.off?" (arrived late)":""}`).join("; ")}.`);}},"!"):null,
+      S.me.isOwner&&c&&c.off?el("span",{class:"flagdot late",title:"Arrived late",onclick:e=>{e.stopPropagation();toast(`Arrived late: ${heldText(c)}.`);}},"L"):null)),
     el("td",{class:"tbr"},r.tg?el("span",{class:"br "+r.tg,"aria-hidden":"true"}):null),
     el("td",{class:"num long"},r.longTie?el("span",{class:"chip mark",style:"margin-right:6px",text:"tie",onclick:()=>toast(r.tie?"Tied on every set":"Tied on Long · broken by the circled set")}):null,fmt(r.long)),
     el("td",{},divOf[r.h.id]?el("span",{class:"chip"+(ev.seeding?" on":""),text:divOf[r.h.id]}):el("span",{class:"muted small",text:"—"})),
@@ -686,6 +704,9 @@ function vEnter(){const ev=EV(),out=[el("div",{class:"sechead"},el("h2",{text:"E
   const msg=(t)=>{out.push(el("div",{class:"panel"},el("p",{style:"margin:0"},t)));return out;};
   if(S.noDb)return msg("Couldn't reach Hit The Grid. Check your connection and reload.");
   if(!S.me.id||S.needName){out.push(signInBox());return out;}
+  const asideNotes=[];for(const info of Object.values(S.keyIndex||{})){const r=info.res;if(!r.key)continue;for(const [h,e] of [[r.a,r.ea],[r.b,r.eb]])
+    for(const x of asideFor(r.key,h,e?.uid))if(x.u===S.me.id)asideNotes.push(el("div",{class:"note warn"},`Your ${x.v!=null?fmt(x.v):"entry"} for ${nameOf(h)} (${info.div.name} ${r.round}) reached the server after ${pname(e?.uid)}'s entry, so theirs counts. The director has been notified and can review it.`));}
+  out.push(...asideNotes);
   if(S.canWrite===false)return msg("You have view-only access to this event. Ask the director to give you Contributor access so you can enter scores.");
   if(!ev)return msg("The director hasn't set up this event yet.");
   const mine=ev.hitters.filter(h=>assigned(S.me.id,h.id)).map(h=>h.id);
@@ -1150,10 +1171,15 @@ function matchControl(){const list=[];
       const sc=r.ea?.revealed&&r.eb?.revealed?` ${fmt(r.ea.v)} – ${fmt(r.eb.v)}`:"";
       return el("div",{class:"li"+(S.focusMatch===r.pk?" focus":""),id:"mc_"+r.pk},el("span",{class:"chip "+st[1],text:st[0]}),el("span",{class:"grow"},el("strong",{text:`${nameOf(r.a)} vs ${nameOf(r.b)}`}),el("span",{class:"muted small",text:` · ${b.div.name}, ${r.round}`}),el("span",{class:"mono small",text:sc})),
         (r.ea?.bad||r.eb?.bad)?el("span",{class:"chip bad",text:"Failed check"}):null,
+        ...[[r.a,r.ea],[r.b,r.eb]].filter(([h,e])=>e&&e.off).map(([h,e])=>el("span",{class:"chip bad",text:`${nameOf(h).split(" ")[0]}: late entry`,onclick:()=>toast(`${nameOf(h)}'s entry arrived late: ${heldText(e)}. Check the Log for times.`)})),
         el("button",{class:"ghost",onclick:()=>setW(r,r.a,`${b.div.name} ${r.round}: advanced ${nameOf(r.a)} over ${nameOf(r.b)}`)},nameOf(r.a).split(" ")[0]+" wins"),
         el("button",{class:"ghost",onclick:()=>setW(r,r.b,`${b.div.name} ${r.round}: advanced ${nameOf(r.b)} over ${nameOf(r.a)}`)},nameOf(r.b).split(" ")[0]+" wins"),
         r.status==="td"?el("button",{class:"ghost",onclick:()=>setW(r,null,`${b.div.name} ${r.round}: cleared director call`)},"Clear call"):null,
-        el("button",{onclick:()=>openRehit(r)},"Rehit"));}):el("div",{class:"muted li",text:"No matches ready yet."})));}
+        el("button",{onclick:()=>openRehit(r)},"Rehit"),
+        ...[[r.a,r.ea],[r.b,r.eb]].flatMap(([h,e])=>asideFor(r.key,h,e?.uid).map(x=>el("div",{class:"aside"},
+          el("span",{class:"chip mark",text:"Set aside"}),
+          el("span",{class:"grow small",text:`${pname(x.u)} locked in ${x.v!=null?fmt(x.v):"a number"} for ${nameOf(h)}, but ${e?.revealed?fmt(e.v):"another entry"} by ${pname(e?.uid)} reached the server first${x.c.off?` (this one was ${heldText(x.c)})`:""}.`}),
+          x.v!=null?el("button",{class:"ghost",onclick:()=>numChange([{t:"mp",key:r.key,hid:h,v:x.v}],`${b.div.name} ${r.round}: used ${pname(x.u)}'s set-aside ${fmt(x.v)} for ${nameOf(h)}`)},`Use ${fmt(x.v)}`):null))));}):el("div",{class:"muted li",text:"No matches ready yet."})));}
 function seedEditor(){const ev=EV(),sd=ev.seeding;const inDiv=new Set(sd.divisions.flatMap(d=>d.seeds));
   const unseeded=ev.hitters.filter(h=>h.status!=="withdrawn"&&!inDiv.has(h.id));
   return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Division seeds"}),el("span",{class:"muted small",text:"Edit one division without touching the others"})),
@@ -1194,16 +1220,20 @@ function testerSection(){const divs=EV()?.divisions||defaultEvent().divisions;
 function entryLog(){const out=[],ok=(u,h)=>assigned(u,h)?"":" · not counted (not linked)";
   const ml=key=>{const info=S.keyIndex[key],att=+key.split("#")[1]||0;return info?` (${info.div.name} ${info.res.round}${att?" rehit":""})`:"";};
   for(const [u,d] of Object.entries(S.rr))for(const [hk,sets] of Object.entries(d?.e||{})){const hid=curKey(hk);if(hid==null)continue;for(const [i,c] of Object.entries(sets||{})){if(!c||!c.at)continue;const chain=[...(c.hist||[]),{v:c.v,at:c.at}];
-    chain.forEach((x,j)=>{if(x.by&&x.by!==u)return;const prev=chain[j-1];out.push({at:x.at,k:"entry",t:prev?`${pname(u)} changed round robin set ${+i+1} for ${nameOf(hid)}: ${fmt(prev.v)} → ${fmt(x.v)} yds${ok(u,hid)}`:`${pname(u)} entered round robin set ${+i+1} for ${nameOf(hid)}: ${fmt(x.v)} yds${ok(u,hid)}`});});}}
-  for(const [u,d] of Object.entries(S.commits)){for(const [key,o] of Object.entries(d?.m||{})){if(curKey(key)==null)continue;for(const [hid,c] of Object.entries(o||{}))if(c?.at)out.push({at:c.at,k:"entry",t:`${pname(u)} locked in a match play number for ${nameOf(hid)}${ml(key)}${ok(u,hid)}`});}
-    for(const [hk,o] of Object.entries(d?.ahead||{})){const hid=curKey(hk);if(hid==null)continue;for(const [k,c] of Object.entries(o||{}))if(c?.at)out.push({at:c.at,k:"entry",t:`${pname(u)} locked in Match play – Set ${+k+1} for ${nameOf(hid)}, hit ahead${ok(u,hid)}`});}}
+    chain.forEach((x,j)=>{if(x.by&&x.by!==u)return;const prev=chain[j-1];const late=j===chain.length-1&&c.off?lateNote(c):"";out.push({at:x.at,k:late?"late":"entry",t:late+(prev?`${pname(u)} changed round robin set ${+i+1} for ${nameOf(hid)}: ${fmt(prev.v)} → ${fmt(x.v)} yds${ok(u,hid)}`:`${pname(u)} entered round robin set ${+i+1} for ${nameOf(hid)}: ${fmt(x.v)} yds${ok(u,hid)}`)});});}}
+  for(const [u,d] of Object.entries(S.commits)){for(const [key,o] of Object.entries(d?.m||{})){if(curKey(key)==null)continue;for(const [hid,c] of Object.entries(o||{}))if(c?.at){const ch=pickEntry(key,hid,null);const aside=ch&&ch.u!==u&&assigned(u,hid)?" · set aside, another entry reached the server first":"";
+      out.push({at:c.at,k:c.off?"late":"entry",t:(c.off?lateNote(c):"")+`${pname(u)} locked in a match play number for ${nameOf(hid)}${ml(key)}${ok(u,hid)}${aside}`});}}
+    for(const [hk,o] of Object.entries(d?.ahead||{})){const hid=curKey(hk);if(hid==null)continue;for(const [k,c] of Object.entries(o||{}))if(c?.at)out.push({at:c.at,k:c.off?"late":"entry",t:(c.off?lateNote(c):"")+`${pname(u)} locked in Match play – Set ${+k+1} for ${nameOf(hid)}, hit ahead${ok(u,hid)}`});}}
   for(const [u,d] of Object.entries(S.joins))if(d?.at)out.push({at:d.at,k:"login",t:`${pname(u)} requested to enter scores`});
   return out;}
+// Shown in the Log on any entry that waited on a phone because of a connection problem.
+function lateNote(c){return `Typed ${tstrS(c.at)}, reached the server ${tstrS(c.rt)} (${heldText(c)}). `;}
+const tstrS=t=>t?new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit",second:"2-digit"}):"?";
 function logSection(){const f=S.logf||"all";const dir=(S.admin?.log||[]).filter(l=>(l.ev||"")===(EV()?.eid||"")).map(l=>({at:l.at,k:"director",t:l.t}));
-  const all=dir.concat(entryLog()).filter(x=>f==="all"||x.k===f||(f==="entry"&&x.k==="login")).sort((a,b)=>b.at-a.at).slice(0,400);
-  const kl={director:["Director","on"],entry:["Entry","mark"],login:["Login",""]};
+  const all=dir.concat(entryLog()).filter(x=>f==="all"||x.k===f||(f==="entry"&&(x.k==="login"||x.k==="late"))).sort((a,b)=>b.at-a.at).slice(0,400);
+  const kl={director:["Director","on"],entry:["Entry","mark"],login:["Login",""],late:["Late","bad"]};
   return el("section",{class:"panel sec"},el("div",{class:"sechead"},el("div",{class:"row"},el("h2",{text:"Activity log"}),undoBtn()),
-      el("div",{class:"subnav",style:"gap:6px"},[["all","All"],["director","Director"],["entry","Entries"]].map(([v,l])=>el("button",{"aria-selected":f===v?"true":"false",style:"padding:5px 12px;font-size:12px",onclick:()=>{S.logf=v;schedule();}},l)))),
+      el("div",{class:"subnav",style:"gap:6px"},[["all","All"],["director","Director"],["entry","Entries"],["late","Late entries"]].map(([v,l])=>el("button",{"aria-selected":f===v?"true":"false",style:"padding:5px 12px;font-size:12px",onclick:()=>{S.logf=v;schedule();}},l)))),
     el("div",{class:"list log"},all.length?all.map(l=>el("div",{class:"li"},el("span",{class:"mono small muted",style:"min-width:9em",text:tstr(l.at)}),el("span",{class:"chip "+kl[l.k][1],text:kl[l.k][0]}),el("span",{class:"grow",text:l.t}))):el("div",{class:"muted li",text:"Every entry and director change shows here with who made it and when."})));}
 
 

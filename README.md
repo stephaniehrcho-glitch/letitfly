@@ -50,6 +50,8 @@ For local sign-in codes on screen, create `.dev.vars` with `DEV_SHOW_CODES=1`.
 
 - **Live updates:** every open phone keeps one connection to the `Hub` Durable Object, which pushes each saved change to everyone within a fraction of a second. If a connection drops it reconnects on its own, and a slow background check catches anything missed.
 - **No signal:** entries are saved on the phone and sent automatically when the connection returns. A banner shows what's waiting. Keep the page open until it clears.
+- **Late entries:** the server stamps when each entry arrives and whether it was held on a phone by a connection problem (and for how long, measured on the phone's own clock). Every late entry is listed under Log → Late entries.
+- **Duplicate entries:** match play counts the sealed entry the server received first; a later one is set aside and shown in Match control, where the director can use it instead. Round robin counts the latest number typed, and a red ! marks any set where two people entered different numbers.
 - **Backups:** Director → Backup & Print → Download backup (loads back in through "Bring over your existing data"), plus CSV results for round robin and match play.
 - **Paper fallback:** Director → Backup & Print → Open printable sheets: roster and round robin sheet plus a sheet per division, with any scores already entered filled in.
 - **A change breaks something:** Cloudflare → Workers & Pages → hitthegrid → Deployments → roll back to the previous version.

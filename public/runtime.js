@@ -81,8 +81,8 @@
     const id = Math.random().toString(36).slice(2);
     // A newer save for the same document replaces a waiting one (not one being sent).
     const i = outbox.findIndex((e) => e.path === path && e.id !== inFlight);
-    const entry = { path, data: del ? null : data, del: !!del, id };
-    if (i >= 0) { const old = outbox[i]; outbox[i] = entry; settle(old.id, null, { replaced: true }); }
+    const entry = { path, data: del ? null : data, del: !!del, id, fails: 0 };
+    if (i >= 0) { const old = outbox[i]; entry.fails = old.fails || 0; outbox[i] = entry; settle(old.id, null, { replaced: true }); }
     else outbox.push(entry);
     saveOutbox();
     setStatus({});
@@ -100,12 +100,18 @@
       const e = outbox[0]; inFlight = e.id;
       try {
         if (e.del) await api("/api/doc?path=" + encodeURIComponent(e.path), { method: "DELETE" });
-        else await api("/api/doc", { method: "PUT", body: JSON.stringify({ path: e.path, data: e.data }) });
+        // Tells the server whether this save was held up by a connection problem,
+        // and the phone's clock now, so it can work out how long each entry waited.
+        else await api("/api/doc", { method: "PUT", body: JSON.stringify({ path: e.path, data: e.data }),
+          headers: { "Content-Type": "application/json", "X-Held": e.fails ? "1" : "0", "X-Client-Now": String(Date.now()) } });
         outbox.shift(); saveOutbox(); settle(e.id, null, { sent: true });
         setStatus({ online: true });
       } catch (err) {
         if (retryable(err)) {
           // Keep it on the phone; the app treats it as saved and it goes out later.
+          // Everything waiting behind it is held up too.
+          for (const x of outbox) x.fails = (x.fails || 0) + 1;
+          saveOutbox();
           for (const x of outbox) settle(x.id, null, { queued: true });
           setStatus({ online: false });
           flushTimer = setTimeout(flush, 4000);
