@@ -32,7 +32,7 @@ Runs on Cloudflare Workers with a D1 database. Hitters and scorekeepers sign in 
 ## Who can do what
 
 - **Everyone starts at a welcome screen:** I'm a hitter / I'm an authorized scorekeeper (email sign-in) or I'm a spectator (event code). Nothing about an event is shown or sent until someone signs in or enters the code.
-- **Spectators with the event code:** watch the Tracker only, no account needed. The director finds the code (and a shareable link, `hitthegrid.app/?event=CODE`) in Director → Event Flow, and can reset it at any time.
+- **Spectators with the event code:** watch the Tracker only, no account needed. The director finds the code (and a shareable link, `hitthegrid.app/?event=CODE`) in Director → Event Flow. Codes follow the event date, e.g. `Nov10-2026-1`.
 - **Signed-in hitters and scorekeepers:** request access, then enter scores for the hitters the director assigns them (their own facility by default).
 - **Director (`OWNER_EMAILS`):** everything, including the Hitter and Facility libraries, which stay private to the director.
 
