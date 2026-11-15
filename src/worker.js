@@ -11,6 +11,9 @@ const MAX_DOC_BYTES = 900_000;
 
 // Collections a signed-in hitter or scorekeeper may write, only at <coll>/<their id>.
 const SELF_WRITE = new Set(["joins", "rr", "commits", "reveals", "vault"]);
+// What a spectator with the event code can read: enough to draw the Tracker.
+const SPECTATOR_READ = new Set(["event", "admin", "rr", "commits", "reveals"]);
+const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
 // Collections only the director can read (vault: director, or the owner of that doc).
 const OWNER_READ = new Set(["private"]);
 
@@ -165,18 +168,27 @@ function canWrite(path, me, env) {
 const validPath = (p) => typeof p === "string" && /^[A-Za-z0-9_-]{1,40}\/[A-Za-z0-9_.:~#-]{1,120}$/.test(p);
 
 async function sync(env, me, url) {
-  // Nothing about the event is visible until someone signs in.
-  if (!me) return json({ now: Date.now(), docs: [], me: null });
+  // Signed-out visitors see nothing, unless they give the current event's
+  // spectator code, which unlocks the Tracker data only.
+  let spectator = false;
+  if (!me) {
+    const code = normCode(url.searchParams.get("code"));
+    if (!code) return json({ now: Date.now(), docs: [], me: null });
+    const ev = await env.DB.prepare("SELECT data FROM docs WHERE path='event/main'").first();
+    const evCode = ev && ev.data ? normCode(JSON.parse(ev.data).code) : "";
+    if (!evCode || evCode !== code) return json({ error: "That code doesn't match a current event." }, 404);
+    spectator = true;
+  }
   const since = Math.max(0, Number(url.searchParams.get("since")) || 0);
   const now = Date.now();
   const rs = await env.DB.prepare("SELECT path,data,updated_at FROM docs WHERE updated_at>? ORDER BY updated_at")
     .bind(since).all();
   const docs = [];
   for (const r of rs.results || []) {
-    if (!canRead(r.path, me, env)) continue;
+    if (spectator ? !SPECTATOR_READ.has(r.path.split("/")[0]) : !canRead(r.path, me, env)) continue;
     docs.push({ p: r.path, d: r.data == null ? null : JSON.parse(r.data), t: r.updated_at });
   }
-  return json({ now, docs, me: me ? publicMe(me, env) : null });
+  return json({ now, docs, me: me ? publicMe(me, env) : null, spectator });
 }
 
 async function writeDoc(req, env, me, url) {

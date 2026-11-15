@@ -253,6 +253,10 @@ button.solidbtn{background:var(--bad);color:var(--bg);border-color:var(--bad)}
 @media (max-width:560px){.brand h1{font-size:21px} nav.tabs{width:100%} nav.tabs a{flex:1;text-align:center;padding:7px 6px}}
 nav.tabs a.acct{font-size:12px;opacity:.6}
 @media (max-width:560px){nav.tabs a.acct{flex:0 0 auto}}
+.roles{display:grid;gap:10px;margin-top:4px}
+.rolebtn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px;border-radius:10px;font-size:15px}
+.rolebtn strong{font-size:16px}.rolebtn span{font-weight:400;font-size:13px}
+.codebig{font-family:var(--f-mono);font-size:34px;font-weight:700;letter-spacing:.18em;padding:6px 0}
 </style>
 
 <header class="band"><div class="wrap">
@@ -521,11 +525,13 @@ let pend=false;function schedule(){if(pend)return;pend=true;requestAnimationFram
 function render(){const app=document.getElementById("app");const a=document.activeElement;const fid=a&&a.id;let sel=null;
   try{sel=[a.selectionStart,a.selectionEnd]}catch(e){}
   renderHeader();
-  if(!S.noDb&&(!S.authReady||!S.me.id||S.needName)){
-    app.replaceChildren(S.authReady?signInBox():el("div",{class:"panel"},el("p",{class:"muted",style:"margin:0"},"Loading…")));
+  const signedIn=!!S.me.id&&!S.needName;
+  if(!S.noDb&&!signedIn&&!S.spectate){
+    app.replaceChildren(!S.authReady?el("div",{class:"panel"},el("p",{class:"muted",style:"margin:0"},"Loading…"))
+      :S.needName||(S.role&&S.role!=="spectator")?signInBox():S.role==="spectator"?codeBox():welcomeBox());
     if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement)n.focus({preventScroll:true});}return;}
   if(EV())computeAll();
-  const v=view();app.replaceChildren(...[].concat(v==="enter"?vEnter():v==="director"?vDirector():vTracker()));
+  const v=S.spectate&&!signedIn?"tracker":view();app.replaceChildren(...[].concat(v==="enter"?vEnter():v==="director"?vDirector():vTracker()));
   if(S.sub&&S.sub.startsWith("rrrow:")&&S.me.isOwner&&EV()&&hitter(S.sub.slice(6)))app.append(rrRowModal(S.sub.slice(6)));
   if(S.warn)app.append(warnModal());
   if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement){n.focus({preventScroll:true});try{if(sel&&sel[0]!=null)n.setSelectionRange(sel[0],sel[1])}catch(e){}}}
@@ -534,9 +540,12 @@ function render(){const app=document.getElementById("app");const a=document.acti
     setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
   if(S.me.isOwner){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
-function renderHeader(){const gated=!S.me.id||S.needName;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
+function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
   document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
   if(gated){document.getElementById("tabs").replaceChildren();return;}
+  if(!signedIn){document.getElementById("tabs").replaceChildren(
+    el("a",{href:"#",class:"acct",text:"Leave event",onclick:e=>{e.preventDefault();LIF.leaveEvent();S.spectate=false;S.role=null;LIF.role(null);location.hash="";location.reload();}}),
+    el("a",{href:"#",class:"acct",text:"Sign in",onclick:e=>{e.preventDefault();S.spectate=false;S.role=null;schedule();}}));return;}
   const tabs=[["tracker","Tracker"],["enter","Enter scores"]];if(S.me.isOwner||S.noDb)tabs.push(["director","Director"]);
   document.getElementById("tabs").replaceChildren(...tabs.map(([k,l])=>el("a",{href:"#"+k,"aria-current":view()===k?"page":null,text:l,onclick:e=>{e.preventDefault();goView(k);}})),
     S.me.id?el("a",{href:"#",class:"acct",text:"Sign out",onclick:async e=>{e.preventDefault();try{await LIF.logout()}catch(x){}location.hash="#tracker";location.reload();}})
@@ -802,7 +811,7 @@ function vDirector(){if(!S.noDb&&!S.me.isOwner)return [el("div",{class:"panel"},
   const go=k=>{S.dtab=k==="event"?(S.lastSub||(ev.phase==="setup"?"settings":"flow")):k;S.confirm=null;schedule();};
   out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Director sections"},tops.map(([k,l])=>el("button",{role:"tab","aria-selected":(k==="event"?inEv:t===k)?"true":"false",onclick:()=>go(k)},l))));
   if(inEv)out.push(el("div",{class:"subtabs",role:"tablist","aria-label":"Event sections"},subs.map(([k,l])=>el("button",{role:"tab","aria-selected":t===k?"true":"false",onclick:()=>{S.dtab=k;S.confirm=null;schedule();}},l))));
-  if(t==="flow")out.push(...[phaseSection(),live?matchControl():null,ev.phase==="setup"?el("div",{class:"note",text:"Set the format in Details, add hitters and link logins in Hitters, then start the round robin here."}):correctionsSection()].filter(Boolean));
+  if(t==="flow")out.push(...[phaseSection(),codeCard(),live?matchControl():null,ev.phase==="setup"?el("div",{class:"note",text:"Set the format in Details, add hitters and link logins in Hitters, then start the round robin here."}):correctionsSection()].filter(Boolean));
   if(t==="seeds")out.push(live?seedEditor():seedPreview());
   if(t==="hitters")out.push(rosterSection(),scorersSection());
   if(t==="settings"){const [det,dv]=settingsSection();out.push(det,dv,setupHittersCard());}
@@ -1185,9 +1194,11 @@ function signInBox(){const L=S.login=S.login||{step:S.needName?"name":"email",em
   const enter=f=>e=>{if(e.key==="Enter"){e.preventDefault();f();}};
   const box=[];
   if(L.step==="email"){
-    box.push(el("h3",{text:"Sign in"}),el("p",{class:"muted",style:"margin:0"},"Sign in to follow the event and enter scores. We'll email you a 6-digit code. No password and no app to install."),
+    const head={hitter:"Hitter sign in",scorekeeper:"Scorekeeper sign in",director:"Director sign in"}[S.role]||"Sign in";
+    box.push(el("h3",{text:head}),el("p",{class:"muted",style:"margin:0"},"We'll email you a 6-digit code to sign in. No password and no app to install."),
       el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"li_email",type:"email",autocomplete:"email",inputmode:"email",placeholder:"you@email.com",value:L.email,style:"flex:1 1 220px",oninput:e=>L.email=e.target.value,onkeydown:enter(send)}),
-        el("button",{class:"primary",disabled:L.busy,onclick:send},L.busy?"Sending…":"Email me a code")));
+        el("button",{class:"primary",disabled:L.busy,onclick:send},L.busy?"Sending…":"Email me a code")),
+      el("div",{class:"row"},el("button",{class:"ghost",onclick:()=>{S.role=null;LIF.role(null);L.err="";schedule();}},"← Back")));
   }else if(L.step==="code"){
     box.push(el("h3",{text:"Check your email"}),el("p",{class:"muted",style:"margin:0"},"Enter the 6-digit code we sent to ",el("strong",{text:L.email}),". It expires in 10 minutes."),
       el("p",{class:"muted",style:"margin:0"},"It comes from ",el("strong",{text:"login@hitthegrid.app"}),". Don't see it within a minute? Check your spam or junk folder."),
@@ -1203,6 +1214,45 @@ function signInBox(){const L=S.login=S.login||{step:S.needName?"name":"email",em
   }
   if(L.err)box.push(el("div",{class:"note bad",text:L.err}));
   return el("section",{class:"panel sec"},...box.filter(Boolean));}
+
+
+/* ---------- welcome: pick who you are ---------- */
+function welcomeBox(){const pick=r=>()=>{S.role=r;LIF.role(r);if(S.login)S.login.err="";S.focusId=r==="spectator"?"ev_code":"li_email";schedule();};
+  const opt=(r,t,d)=>el("button",{class:"rolebtn",onclick:pick(r)},el("strong",{text:t}),el("span",{class:"muted",text:d}));
+  return el("section",{class:"panel sec"},el("h3",{text:"Welcome to Hit The Grid"}),el("p",{class:"muted",style:"margin:0"},"Live long drive scoring. Who are you today?"),
+    el("div",{class:"roles"},
+      opt("hitter","I'm a hitter","Sign in to enter your scores."),
+      opt("scorekeeper","I'm an authorized scorekeeper","Sign in to enter scores for your facility."),
+      opt("spectator","I'm a spectator","Follow an event live with its event code.")),
+    el("p",{class:"muted",style:"margin:4px 0 0;font-size:12px"},"Running the event? ",el("a",{href:"#",onclick:e=>{e.preventDefault();pick("director")();}},"Director sign in")));}
+
+/* ---------- spectator: event code ---------- */
+function codeBox(){const C=S.codeEntry=S.codeEntry||{code:"",err:S.codeErr||"",busy:false};S.codeErr="";
+  const go=async()=>{if(C.busy)return;C.busy=true;C.err="";schedule();
+    try{await LIF.useCode(C.code);S.spectate=true;location.hash="#tracker";location.reload();}catch(e){C.err=e.message||"That code didn't work";C.busy=false;schedule();}};
+  return el("section",{class:"panel sec"},el("h3",{text:"Enter the event code"}),
+    el("p",{class:"muted",style:"margin:0"},"The event director shares a short code, on a sign at the facility or in a message. Enter it to follow the event live."),
+    el("div",{class:"row",style:"flex-wrap:wrap"},el("input",{id:"ev_code",autocomplete:"off",autocapitalize:"characters",placeholder:"e.g. K7Q4MP",value:C.code,maxlength:"12",
+        style:"flex:0 1 200px;letter-spacing:.15em;text-transform:uppercase;font-family:var(--f-mono)",oninput:e=>C.code=e.target.value,onkeydown:e=>{if(e.key==="Enter"){e.preventDefault();go();}}}),
+      el("button",{class:"primary",disabled:C.busy,onclick:go},C.busy?"Checking…":"View event")),
+    C.err?el("div",{class:"note bad",text:C.err}):null,
+    el("div",{class:"row"},el("button",{class:"ghost",onclick:()=>{S.role=null;LIF.role(null);C.err="";schedule();}},"← Back")));}
+
+/* ---------- director: spectator code card ---------- */
+const CODE_ABC="ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const newCode=()=>Array.from(crypto.getRandomValues(new Uint8Array(6)),x=>CODE_ABC[x%CODE_ABC.length]).join("");
+function codeCard(){const ev=EV();if(!ev)return null;const code=ev.code||"";const link=location.origin+"/?event="+code;
+  const c=S.confirm&&S.confirm.k==="resetcode";
+  const copy=async()=>{try{await navigator.clipboard.writeText(link);toast("Link copied");}catch(e){toast(link);}};
+  return el("section",{class:"panel sec"},el("h2",{text:"Spectator code"}),
+    el("p",{class:"muted",style:"margin:0"},"Anyone with this code can watch the Tracker without signing in. They can't enter or change scores."),
+    el("div",{class:"codebig",text:code||"…"}),
+    el("div",{class:"row",style:"flex-wrap:wrap"},el("button",{class:"primary",onclick:copy,disabled:!code},"Copy link"),
+      c?el("span",{class:"row",style:"margin:0"},el("span",{class:"muted",text:"New code? The old one stops working right away."}),
+          el("button",{class:"danger",onclick:()=>{S.confirm=null;saveEvent(e=>e.code=newCode(),"Reset the spectator code");}},"Reset code"),
+          el("button",{class:"ghost",onclick:()=>{S.confirm=null;schedule();}},"Cancel"))
+        :el("button",{class:"ghost",onclick:()=>{S.confirm={k:"resetcode"};schedule();}},"Reset code")),
+    el("p",{class:"muted mono",style:"margin:0;font-size:12px;word-break:break-all",text:link}));}
 
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
@@ -1223,8 +1273,11 @@ render();
   const [db,user]=await Promise.all([c.use("db"),c.use("user")]);
   if(!db){S.noDb=true;schedule();return;}
   S.db=db;S.user=user;if(!user)S.authReady=true;
+  S.role=LIF.role()||null;
+  window.addEventListener("htg-code-invalid",e=>{if(S.me.id)return;S.spectate=false;S.role="spectator";S.codeErr="That event code isn't active any more. Ask the director for the current one.";S.codeEntry=null;schedule();});
   if(user){try{const me=await user.me();S.me={id:me.id,isOwner:!!me.isOwner};}catch(e){}
     try{const full=await LIF.me();if(full&&!full.name)S.needName=true;}catch(e){}
+    if(!S.me.id&&LIF.getCode())S.spectate=true;
     S.authReady=true;schedule();
     if(!S.me.isOwner){try{S.me.isOwner=!!(await user.isOwner());}catch(e){}}
     if(!S.me.id){let tries=0;const retry=async()=>{let id=null;try{id=await user.id();}catch(e){}
@@ -1232,7 +1285,8 @@ render();
       setTimeout(retry,1500);document.addEventListener("visibilitychange",()=>{if(!S.me.id&&!document.hidden){tries=0;retry();}});}}
   const timer=setTimeout(()=>{S.stale=true;S.loaded=true;schedule();},10000);
   const err=e=>{console.warn(e);schedule();};
-  db.doc("event/main").onSnapshot(s=>{S.event=s.exists?s.data():null;S.loaded=true;if(!s.metadata.fromCache){clearTimeout(timer);S.stale=false;}schedule();},e=>{clearTimeout(timer);S.loaded=true;err(e)});
+  db.doc("event/main").onSnapshot(s=>{S.event=s.exists?s.data():null;S.loaded=true;
+    if(S.me.isOwner&&S.event&&!S.event.code&&!s.metadata.fromCache&&!S.codeMade){S.codeMade=true;saveEvent(e=>{if(!e.code)e.code=newCode();});}if(!s.metadata.fromCache){clearTimeout(timer);S.stale=false;}schedule();},e=>{clearTimeout(timer);S.loaded=true;err(e)});
   db.doc("admin/state").onSnapshot(s=>{S.admin=s.exists?s.data():{};schedule();},err);
   db.doc("private/hitters").onSnapshot(s=>{S.priv=s.exists?s.data():(S.me.isOwner?{emails:{}}:null);S.privLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
   db.doc("private/library").onSnapshot(s=>{S.lib=s.exists?s.data():(S.me.isOwner?{hitters:{}}:null);S.libLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});

@@ -6,6 +6,15 @@
   const docSubs = new Map();      // path -> Set(fn)
   const colSubs = new Map();      // coll -> Set(fn)
   let since = 0, synced = false, me = null, polling = null;
+  // Spectator event code: from ?event=CODE in the link, or remembered on this device.
+  const store_ = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+  let code = null;
+  try {
+    const q = new URLSearchParams(location.search).get("event");
+    if (q) { store_.set("htg_code", q.toUpperCase()); history.replaceState(null, "", location.pathname + location.hash); }
+  } catch {}
+  code = store_.get("htg_code");
 
   const clone = (x) => (x == null ? x : JSON.parse(JSON.stringify(x)));
   const snapDoc = (p) => {
@@ -39,7 +48,7 @@
   async function poll() {
     try {
       // Small overlap so a write landing at the same moment is never skipped.
-      const j = await api("/api/sync?since=" + Math.max(0, since - 2000));
+      const j = await api("/api/sync?since=" + Math.max(0, since - 2000) + (code ? "&code=" + encodeURIComponent(code) : ""));
       const changed = [];
       for (const { p, d } of j.docs) {
         const cur = store.get(p);
@@ -55,6 +64,11 @@
         colSubs.forEach((set, c) => set.forEach((f) => f(snapCol(c))));
       } else if (changed.length) notify(changed);
     } catch (e) {
+      if (e.status === 404 && code) {
+        // Code no longer matches (reset by the director, or a new event started).
+        code = null; store_.set("htg_code", null);
+        window.dispatchEvent(new CustomEvent("htg-code-invalid", { detail: e.message }));
+      }
       console.warn("sync", e);
     }
     clearTimeout(polling);
@@ -119,6 +133,15 @@
     verifyLogin: (email, code, name) => api("/api/auth/verify", { method: "POST", body: JSON.stringify({ email, code, name }) }),
     setName: (name) => api("/api/me", { method: "POST", body: JSON.stringify({ name }) }),
     logout: () => api("/api/auth/logout", { method: "POST" }),
+    getCode: () => code,
+    // Checks a spectator code against the server, then remembers it on this device.
+    useCode: async (c) => {
+      const clean = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      await api("/api/sync?since=" + Date.now() + "&code=" + encodeURIComponent(clean));
+      store_.set("htg_code", clean); code = clean;
+    },
+    leaveEvent: () => { store_.set("htg_code", null); code = null; },
+    role: (r) => { if (r !== undefined) store_.set("htg_role", r); return store_.get("htg_role"); },
     importDocs: (docs, remap) => api("/api/import", { method: "POST", body: JSON.stringify({ docs, remap }) }),
   };
 
