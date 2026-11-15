@@ -654,8 +654,8 @@ function standings(){const ev=EV(),rows=ranking(),n=ev.rrSets;
     el("td",{class:"num"},el("span",{class:"rank",text:r.rank})),
     el("td",{},flc(r.h.country),r.h.name,r.h.site?el("span",{class:"muted small",text:" · "+r.h.site}):null,r.tie?el("span",{class:"chip bad review",text:"Review – no tiebreaker",onclick:()=>toast(`Tied on every set with ${(r.tieWith||[]).join(", ")}. Nothing breaks this tie, so the director needs to decide the order.`)}):null),
     r.cells.map((c,ci)=>el("td",{class:"num",onclick:c?()=>toast((r.tbCells.has(ci)?"Broke a tie on Long · ":"")+(c.src==="td"?"Set by the director":(c.edited?"Edited ":"Submitted ")+tstr(c.at))):null},c?(r.tbCells.has(ci)?el("span",{class:"tb",text:fmt(c.v)}):fmt(c.v)):el("span",{class:"muted",text:"—"}),c&&c.src==="td"?el("span",{class:"muted small",text:" ✎"}):null,
-      S.me.isOwner&&c&&c.conflict?el("span",{class:"flagdot conf",title:"Different numbers entered",onclick:e=>{e.stopPropagation();toast(`Counted: ${fmt(c.v)} by ${pname(c.uid)}. Also entered: ${c.conflict.map(x=>`${fmt(x.v)} by ${pname(x.u)}${x.off?" (arrived late)":""}`).join("; ")}.`);}},"!"):null,
-      S.me.isOwner&&c&&c.off?el("span",{class:"flagdot late",title:"Arrived late",onclick:e=>{e.stopPropagation();toast(`Arrived late: ${heldText(c)}.`);}},"L"):null)),
+      S.me.isOwner&&c?flagBang([c.off?lateReason(pname(c.uid),c):null,
+        c.conflict?`Two different numbers entered. Counted: ${fmt(c.v)} by ${pname(c.uid)}. Also entered: ${c.conflict.map(x=>`${fmt(x.v)} by ${pname(x.u)}${x.off?" (arrived late)":""}`).join("; ")}.`:null].filter(Boolean)):null)),
     el("td",{class:"tbr"},r.tg?el("span",{class:"br "+r.tg,"aria-hidden":"true"}):null),
     el("td",{class:"num long"},r.longTie?el("span",{class:"chip mark",style:"margin-right:6px",text:"tie",onclick:()=>toast(r.tie?"Tied on every set":"Tied on Long · broken by the circled set")}):null,fmt(r.long)),
     el("td",{},divOf[r.h.id]?el("span",{class:"chip"+(ev.seeding?" on":""),text:divOf[r.h.id]}):el("span",{class:"muted small",text:"—"})),
@@ -688,7 +688,8 @@ function matchCard(r,seedOf,ph){if(!r)return el("div",{class:"match"});
     if(hid==="BYE")return el("div",{class:"slot tbd"},el("span",{class:"seed none"}),el("span",{class:"nm",text:"Bye"}),el("span",{class:"yd"}));
     const w=r.winner!==undefined&&r.winner!=="BYE";const cls="slot"+(w&&r.winner===hid?" win":w?" lose":"");
     let val="";if(hitter(hid)?.status==="withdrawn")val="WD";else if(e&&e.revealed&&(both||r.winner!==undefined))val=fmt(e.v);else if(e&&e.committed)val="locked";
-    return el("div",{class:cls},(sd=>el("span",{class:sd?"seed":"seed none",text:sd}))(seedOf(hid)),ph?el("span",{class:"nm muted",text:ph(hid)}):el("span",{class:"nm"+(S.me.isOwner&&!ph&&hid!=="BYE"?" nmlink":""),onclick:S.me.isOwner&&hitter(hid)?()=>{S.modal="enter:"+hid;S.confirm=null;schedule();}:null},fl(hid),nameOf(hid),r.att>0?el("span",{class:"chip mark tiny",title:r.att>1?`Tied ${r.att} times, rehit`:"Tied, rehit",text:r.att>1?`Tie – rehit ×${r.att}`:"Tie – rehit"}):null),el("span",{class:"yd"+(val==="locked"?" muted small":""),text:val}));};
+    return el("div",{class:cls},(sd=>el("span",{class:sd?"seed":"seed none",text:sd}))(seedOf(hid)),ph?el("span",{class:"nm muted",text:ph(hid)}):el("span",{class:"nm"+(S.me.isOwner&&!ph&&hid!=="BYE"?" nmlink":""),onclick:S.me.isOwner&&hitter(hid)?()=>{S.modal="enter:"+hid;S.confirm=null;schedule();}:null},fl(hid),nameOf(hid),r.att>0?el("span",{class:"chip mark tiny",title:r.att>1?`Tied ${r.att} times, rehit`:"Tied, rehit",text:r.att>1?`Tie – rehit ×${r.att}`:"Tie – rehit"}):null),el("span",{class:"yd"+(val==="locked"?" muted small":""),text:val},
+      S.me.isOwner&&e&&r.key?flagBang([e.off?lateReason(pname(e.uid),e):null,...asideFor(r.key,hid,e.uid).map(x=>`Set aside: ${pname(x.u)} also locked in ${x.v!=null?fmt(x.v):"a number"}, but ${pname(e.uid)}'s entry reached the server first${x.c.off?` (the set-aside one was ${heldText(x.c)})`:""}. Review it in Match control.`)]):null));};
   let st=null;
   const rb=S.me.isOwner&&r.pk?el("button",{class:"primary stbtn",onclick:()=>{S.dtab="flow";S.focusMatch=r.pk;S.focusDone=false;goView("director");}},"Resolve →"):null;
   if(r.status==="tie")st=el("div",{class:"st mark"},el("span",{text:"Tie · rehit needed"}),rb);
@@ -1227,6 +1228,9 @@ function entryLog(){const out=[],ok=(u,h)=>assigned(u,h)?"":" · not counted (no
   for(const [u,d] of Object.entries(S.joins))if(d?.at)out.push({at:d.at,k:"login",t:`${pname(u)} requested to enter scores`});
   return out;}
 // Shown in the Log on any entry that waited on a phone because of a connection problem.
+// Red ! for the director, with the reason when tapped.
+function flagBang(reasons){reasons=reasons.filter(Boolean);return reasons.length?el("span",{class:"flagdot conf",title:"Tap for details",onclick:e=>{e.stopPropagation();toast(reasons.join(" "));}},"!"):null;}
+function lateReason(who,c){return `Late entry by ${who}: typed ${tstrS(c.at)}, reached the server ${tstrS(c.rt)} (${heldText(c)}).`;}
 function lateNote(c){return `Typed ${tstrS(c.at)}, reached the server ${tstrS(c.rt)} (${heldText(c)}). `;}
 const tstrS=t=>t?new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit",second:"2-digit"}):"?";
 function logSection(){const f=S.logf||"all";const dir=(S.admin?.log||[]).filter(l=>(l.ev||"")===(EV()?.eid||"")).map(l=>({at:l.at,k:"director",t:l.t}));
