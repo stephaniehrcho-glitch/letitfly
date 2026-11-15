@@ -465,7 +465,8 @@ async function startNewEvent(){const ev=clone(EV()),old=ev.eid||"e0";
   try{await write("archive/"+old,{event:ev,admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{}},archivedAt:Date.now()});}catch(e){toast("Couldn't archive this event, so nothing changed.");return;}
   const d=defaultEvent();const nev=Object.assign(d,{rrSets:ev.rrSets,balls:ev.balls,mpBalls:ev.mpBalls,divisions:ev.divisions,eid:rid("e")});
   await saveAdmin(a=>{a.rr={};a.mpWinner={};a.mpVal={};});S.event=nev;await write("event/main",nev);S.dtab="settings";S.seedDraft={};
-  await addLog(`Started a new event. Previous event “${ev.name}” saved to the archive.`);toast("New event started");}
+  let out="";try{const r=await LIF.signOutOthers();out=r.signedOut?` Signed out ${r.signedOut} device${r.signedOut===1?"":"s"}.`:"";}catch(e){}
+  await addLog(`Started a new event. Previous event “${ev.name}” saved to the archive.${out}`);toast("New event started. Everyone else signs in fresh.");}
 function newSeeding(){const ids=ranking().map(r=>r.h.id);const p=project(ids,EV().divisions);
   return{at:Date.now(),divisions:p.divs.map(d=>Object.assign(d,{ver:rid("v")}))};}
 
@@ -849,7 +850,7 @@ function phaseSection(){const ev=EV(),ph=["setup","rr","match","final"],ix=ph.in
     el("button",{onclick:ask("Re-seed every division from the current standings?"+keep,()=>saveEvent(e=>{e.prevSeeding=e.seeding;e.seeding=newSeeding();},"Re-seeded all divisions from standings"))},"Re-seed all"),
     el("button",{class:"ghost",onclick:ask("Return to the round robin? Brackets come off the tracker. You can restore them as they were, or lock new ones."+keep,()=>saveEvent(e=>{e.prevSeeding=e.seeding;e.seeding=null;e.phase="rr"},"Returned to the round robin"))},"Back to round robin"));}
   if(ev.phase==="match"&&ev.prevSeeding)btns.append(el("button",{class:"ghost",onclick:ask("Put back the brackets from before the last re-seed?",()=>saveEvent(e=>{const t=e.seeding;e.seeding=e.prevSeeding;e.prevSeeding=t;},"Undid the last re-seed"))},"Undo re-seed"));
-  btns.append(el("button",{class:"ghost",onclick:ask(ev.phase==="final"?"Start a new event? This one is saved to your archive. Format and divisions carry over, the roster starts empty, and your Hitter Library stays as is.":"Start a new event now? This event isn't marked complete. It's saved to your archive as it stands, and the new event starts with an empty roster.",startNewEvent)},"Start new event"));
+  btns.append(el("button",{class:"ghost",onclick:ask(ev.phase==="final"?"Start a new event? This one is saved to your archive. Format and divisions carry over, the roster starts empty, and your Hitter Library stays as is. Everyone except you is signed out and signs in again for the new event.":"Start a new event now? This event isn't marked complete. It's saved to your archive as it stands, and the new event starts with an empty roster. Everyone except you is signed out and signs in again for the new event.",startNewEvent)},"Start new event"));
   if(ev.phase==="final")btns.append(el("button",{onclick:()=>saveEvent(e=>e.phase="match","Reopened match play")},"Reopen match play"));
   s.append(btns);return s;}
 function progressTracker(){const ev=EV(),ph=["setup","rr","match","final"],ix=Math.max(0,ph.indexOf(ev.phase));

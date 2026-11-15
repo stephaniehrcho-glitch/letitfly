@@ -56,6 +56,17 @@ async function route(req, env, url) {
     if (t) await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha(t)).run();
     return json({ ok: true }, 200, { "Set-Cookie": `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax` });
   }
+  if (p === "/api/auth/signout-others" && m === "POST") {
+    // Director only: a new event starts, so everyone else signs in fresh.
+    if (!me || !isOwnerEmail(env, me.email)) return json({ error: "Director only" }, 403);
+    const rs = await env.DB.prepare("SELECT s.token_hash, u.email FROM sessions s JOIN users u ON u.id=s.user_id").all();
+    const drop = (rs.results || []).filter((r) => !isOwnerEmail(env, r.email)).map((r) => r.token_hash);
+    for (let i = 0; i < drop.length; i += 90) {
+      const chunk = drop.slice(i, i + 90);
+      await env.DB.prepare(`DELETE FROM sessions WHERE token_hash IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).run();
+    }
+    return json({ ok: true, signedOut: drop.length });
+  }
   if (p === "/api/sync" && m === "GET") return sync(env, me, url);
   if (p === "/api/doc" && (m === "PUT" || m === "DELETE")) return writeDoc(req, env, me, url);
   if (p === "/api/profiles" && m === "POST") return profiles(req, env, me);

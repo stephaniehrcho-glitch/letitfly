@@ -56,6 +56,8 @@
         if (d == null) store.delete(p); else store.set(p, d);
         changed.push(p);
       }
+      // Signed out elsewhere (the director started a new event): start fresh.
+      if (me && !j.me && !j.spectator) { location.hash = ""; location.reload(); return; }
       since = j.now;
       const first = !synced;
       synced = true;
@@ -133,6 +135,7 @@
     verifyLogin: (email, code, name) => api("/api/auth/verify", { method: "POST", body: JSON.stringify({ email, code, name }) }),
     setName: (name) => api("/api/me", { method: "POST", body: JSON.stringify({ name }) }),
     logout: () => api("/api/auth/logout", { method: "POST" }),
+    signOutOthers: () => api("/api/auth/signout-others", { method: "POST" }),
     getCode: () => code,
     // Checks a spectator code against the server, then remembers it on this device.
     useCode: async (c) => {
