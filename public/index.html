@@ -283,6 +283,7 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .pastbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .evrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.evrow.live{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .pastbar.editing{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
+.detailsform{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
 </style>
 
 <header class="band"><div class="wrap">
@@ -611,7 +612,7 @@ function render(){const app=document.getElementById("app");const a=document.acti
   if(S.me.isOwner&&!S.past){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
 function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
-  document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
+  document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",timeText(ev.time),phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
   if(gated){document.getElementById("tabs").replaceChildren();return;}
   if(!signedIn){document.getElementById("tabs").replaceChildren(
     el("a",{href:"#",class:"acct",text:"Leave event",onclick:e=>{e.preventDefault();LIF.leaveEvent();S.spectate=false;S.role=null;LIF.role(null);location.hash="";location.reload();}}),
@@ -1143,7 +1144,7 @@ function settingsSection(){const ev=EV();
     el("select",{id:"df_"+d.id,"aria-label":"Extra hitters",value:d.fill,onchange:e=>saveEvent(x=>x.divisions[i].fill=e.target.value,`${d.name}: ${e.target.value==="bye"?"byes":"play-ins"}`)},el("option",{value:"playin"},"Play-ins"),el("option",{value:"bye"},"Byes")),
     el("button",{class:"ghost","aria-label":"Remove division",disabled:ev.divisions.length<2,onclick:()=>saveEvent(x=>x.divisions.splice(i,1),`Removed division ${d.name}`)},"Remove")));
   return [el("section",{class:"panel sec"},el("h2",{text:"Event details"}),
-    el("div",{class:"grid"},txt("name","Event name"),txt("date","Date","date"),
+    el("div",{class:"grid"},txt("name","Event name"),txt("date","Date","date"),txt("time","Start time","time"),txt("venue","Location"),
       num("rrSets","Round robin sets",1,8),num("balls","Balls per set",1,12),num("mpBalls","Match play balls",1,12))),
     el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Divisions"}),el("span",{class:"chip",text:ev.divisions.length+" division"+(ev.divisions.length===1?"":"s")})),
     el("p",{class:"muted small",style:"margin:0"},"Filled top-down from the standings. Blank size takes everyone left. Play-ins pair the bottom seeds; byes let top seeds skip round one."),
@@ -1402,7 +1403,7 @@ function backupSection(){const ev=EV(),hasMp=!!(S.brackets&&S.brackets.length);
 function printView(){const ev=EV(),n=ev.rrSets,out=[];
   out.push(el("div",{class:"printbar noprint"},el("button",{class:"primary",onclick:()=>window.print()},"Print"),el("button",{onclick:()=>{S.print=false;if(S.pastPrint){leavePast();S.pastPrint=false;}schedule();}},"Close"),
     el("span",{class:"muted",text:"Tip: choose Portrait for the roster and Landscape if brackets look cramped."})));
-  const head=(t)=>el("div",{class:"phead"},el("div",{},el("strong",{text:ev.name||"Event"}),el("span",{text:[ev.date||"",ev.code?"Code "+ev.code:""].filter(Boolean).join(" · ")})),el("h2",{text:t}));
+  const head=(t)=>el("div",{class:"phead"},el("div",{},el("strong",{text:ev.name||"Event"}),el("span",{text:[ev.date||"",timeText(ev.time),ev.venue||"",ev.code?"Code "+ev.code:""].filter(Boolean).join(" · ")})),el("h2",{text:t}));
   // Roster and round robin
   const rows=ranking().slice().sort((a,b)=>(a.h.site||"").localeCompare(b.h.site||"")||a.h.name.localeCompare(b.h.name));
   out.push(el("section",{class:"psheet"},head(`Roster and round robin · ${n} sets × ${ev.balls} balls`),
@@ -1489,13 +1490,15 @@ function eventsSection(){const live=S._event,list=pastEvents();
   const row=(ev,isLive,id,a,w)=>{const n=(ev.hitters||[]).filter(h=>h.status!=="withdrawn").length,ask=S.pastConfirm===id&&id;
     return el("div",{class:"li evrow"+(isLive?" live":"")},
       el("div",{class:"grow"},isLive?el("span",{class:"chip on",style:"margin-right:8px",text:"Live"}):null,el("strong",{text:ev.name||"Event"}),
-        el("span",{class:"muted small",text:` · ${dateText(ev.date)} · ${n} hitter${n===1?"":"s"} · ${phaseName(ev.phase)}${!isLive&&a.editedAt?" · edited "+tstr(a.editedAt):""}`}),winners(w)),
+        el("span",{class:"muted small",text:` · ${[dateText(ev.date),timeText(ev.time),ev.venue].filter(Boolean).join(" · ")} · ${n} hitter${n===1?"":"s"} · ${phaseName(ev.phase)}${!isLive&&a.editedAt?" · edited "+tstr(a.editedAt):""}`}),winners(w)),
       el("div",{class:"row",style:"margin:0;flex-wrap:wrap"},
-        el("button",{class:"primary",onclick:()=>{if(isLive){goView("tracker");}else{S.past=id;S.pastEdit=true;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}}},"Edit"),
+        el("button",{onclick:()=>{S.detailsFor=S.detailsFor===(id||"live")?null:(id||"live");schedule();}},"Details"),
+        el("button",{class:"primary",onclick:()=>{if(isLive){goView("tracker");}else{S.past=id;S.pastEdit=true;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}}},isLive?"Scores":"Edit scores"),
         !isLive?el("button",{onclick:()=>{S.pastConfirm=id;schedule();}},"Make current"):null,
         el("button",{onclick:()=>eventResults(id,"rr")},"Round robin CSV"),
         ev.seeding?el("button",{onclick:()=>eventResults(id,"mp")},"Match play CSV"):null,
         el("button",{onclick:()=>{if(id){S.past=id;S.pastPrint=true;}S.print=true;schedule();window.scrollTo(0,0);}},"Print")),
+      S.detailsFor===(id||"live")?detailsForm(ev,id):null,
       ask?el("div",{class:"note warn",style:"flex-basis:100%"},`Make “${ev.name}” the current event? Everyone will see it live instead of “${live?.name||"the current event"}”, which is saved to this list first. Nothing is deleted.`,
         el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:S.pastBusy,onclick:()=>makeCurrent(id,a)},S.pastBusy?"Switching…":"Yes, make it current"),el("button",{class:"ghost",onclick:()=>{S.pastConfirm=null;schedule();}},"Cancel"))):null);};
   return[el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Events"}),el("span",{class:"muted small",text:"Every event, live and past. Edit, switch, export or print any of them."})),
@@ -1509,7 +1512,7 @@ function eventResults(id,kind){const go=()=>{const name=fileBase()+(kind==="rr"?
 function pastEditor(id,a){const ev=a.event;
   const bar=el("div",{class:"note pastbar editing"},el("span",{class:"grow"},el("strong",{text:"Editing past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. Changes save to this event only. The live event isn't affected.`),
     el("button",{class:"primary",onclick:()=>{leavePast();S.dtab="events";schedule();window.scrollTo(0,0);}},"Done"));
-  return[bar,el("div",{class:"row",style:"margin:-4px 0 10px"},undoBtn(),el("span",{class:"muted small",text:"Use the ✎ on a round robin row, or tap a name in a bracket, to correct a number. Each change is logged."})),
+  return[bar,el("section",{class:"panel sec"},el("h2",{text:"Event details"}),detailsForm(ev,id)),el("div",{class:"row",style:"margin:-4px 0 10px"},undoBtn(),el("span",{class:"muted small",text:"Use the ✎ on a round robin row, or tap a name in a bracket, to correct a number. Each change is logged."})),
     ...withPast(id,()=>[].concat(vTrackerLive()).filter(Boolean),true)];}
 async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule();
   try{const cur=S._event;
@@ -1520,6 +1523,22 @@ async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule()
     leavePast();toast("Done. Everyone now sees this event.");}
   catch(x){toast(x.network?"You're offline. Switching events needs a connection.":"Couldn't switch: "+x.message);}
   S.pastBusy=false;schedule();}
+
+
+/* ---------- event details for any event ---------- */
+const timeText=t=>{if(!t)return"";const [h,m]=t.split(":").map(Number);if(isNaN(h))return t;return new Date(2000,0,1,h,m||0).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});};
+// Saves name/date/time/location for the live event (id null) or a past event.
+async function saveDetails(id,patch){const label=Object.entries(patch).map(([k,v])=>`${{name:"name",date:"date",time:"start time",venue:"location"}[k]||k} → ${v||"(blank)"}`).join(", ");
+  if(!id)return saveEvent(e=>Object.assign(e,patch),"Event details: "+label);
+  const arc=clone(S.archive[id]);Object.assign(arc.event,patch);arc.editedAt=Date.now();S.archive[id]=arc;schedule();
+  try{await write("archive/"+id,arc);const L=clone(S._admin)||{};L.log=[{at:Date.now(),t:`Past event “${arc.event.name}”: details ${label}`,ev:S._event?.eid||""}].concat(L.log||[]).slice(0,300);S._admin=L;await write("admin/state",L);toast("Saved");}
+  catch(e){toast("Couldn't save: "+(e?.message||"error"));}}
+function detailsForm(ev,id){const k=id||"live";const f=(key,label,type)=>el("label",{class:"f"},label,el("input",{id:"ed_"+k+"_"+key,type:type||"text",value:ev[key]||"",
+    onchange:e=>{const v=e.target.value.trim();if(key==="name"&&!v){e.target.value=ev.name||"";return toast("The event needs a name");}if((ev[key]||"")!==v)saveDetails(id,{[key]:v});}}));
+  return el("div",{class:"detailsform",style:"flex-basis:100%"},
+    el("div",{class:"grid"},f("name","Event name"),f("date","Date","date"),f("time","Start time","time"),f("venue","Location")),
+    id?null:el("p",{class:"muted small",style:"margin:0"},"Format, divisions and roster are in Event Details."),
+    id?el("p",{class:"muted small",style:"margin:0"},"Changes save to this past event only and are logged."):null);}
 
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
