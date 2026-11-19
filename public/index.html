@@ -626,7 +626,7 @@ function render(){const app=document.getElementById("app");const a=document.acti
   if(S.focusId){const n=document.getElementById(S.focusId);if(n){n.focus();S.focusId=null;}}
   if(S.focusMatch&&view()==="director"){const n=document.getElementById("mc_"+S.focusMatch);if(n&&n.scrollIntoView&&!S.focusDone){S.focusDone=true;requestAnimationFrame(()=>n.scrollIntoView({block:"center",behavior:"smooth"}));
     setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
-  if(S.me.isOwner&&!S.past){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
+  if(S.me.isOwner&&!S.past){autoLink();syncSiteTZ();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
 function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
   document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",evTime(ev,{local:true}),phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
@@ -1111,18 +1111,22 @@ const facInOpenEvent=l=>EV()&&EV().phase!=="final"&&EV().hitters.some(h=>h.site=
 async function renameFac(id,nf){const f=S.lib.facilities[id],old=facLabel(f),nl=facLabel(nf);
   await saveLib(l=>{l.facilities[id]=Object.assign({},l.facilities[id],nf);if(nl!==old)for(const h of Object.values(l.hitters||{}))if(h.site===old)h.site=nl;},nl!==old?`Renamed facility ${old} to ${nl}`:null);
   if(nl!==old&&EV())await saveEvent(e=>{e.hitters.forEach(h=>{if(h.site===old)h.site=nl});for(const u in e.assign||{})e.assign[u]=e.assign[u].map(x=>x==="loc:"+old?"loc:"+nl:x);});}
-function facilityModal(id){const f=id?S.lib?.facilities?.[id]:null,isNew=!f,k=id||"new",close=()=>{S.modal=null;["f","c"].forEach(x=>delete D["lm_"+x+"_"+k]);schedule();};
+function facilityModal(id){const f=id?S.lib?.facilities?.[id]:null,isNew=!f,k=id||"new",close=()=>{S.modal=null;["f","c","z"].forEach(x=>delete D["lm_"+x+"_"+k]);schedule();};
+  if(D["lm_z_"+k]===undefined)D["lm_z_"+k]=f?.tz||"";
+  const zone=tzSelect("i_lm_z_"+k,D["lm_z_"+k],e=>{D["lm_z_"+k]=e.target.value;});
   const fac=inp("lm_f_"+k,{placeholder:"e.g. The 9th Hole","aria-label":"Facility name",autocomplete:"off"},f?.name||"");
   const city=inp("lm_c_"+k,{placeholder:"e.g. Burlington","aria-label":"City",autocomplete:"off"},f?.city||"");
   const save=async(another)=>{const n=fac.value.trim(),c=city.value.trim();if(!n)return toast("Enter the facility name");if(!c)return toast("Enter the city");
     const lbl=n+" - "+c;if(facList().some(x=>x.id!==id&&x.label.toLowerCase()===lbl.toLowerCase()))return toast("That facility is already in your library");
+    const z=D["lm_z_"+k]||"";
     if(isNew&&another===true){delete D["lm_f_"+k];delete D["lm_c_"+k];S.focusId="i_lm_f_new";schedule();}else close();
-    if(isNew){await saveLib(l=>{l.facilities=l.facilities||{};l.facilities[rid("f")]={name:n,city:c,addedAt:Date.now()};},"Added facility "+lbl);if(another===true)toast("Added "+lbl);}else await renameFac(id,{name:n,city:c});};
+    if(isNew){await saveLib(l=>{l.facilities=l.facilities||{};l.facilities[rid("f")]={name:n,city:c,tz:z,addedAt:Date.now()};},"Added facility "+lbl+(z?` (${tzLabel(z)})`:""));if(another===true)toast("Added "+lbl);}
+    else{if(n!==f.name||c!==f.city)await renameFac(id,{name:n,city:c});if((f.tz||"")!==z)await saveLib(l=>{l.facilities[id].tz=z;},`${lbl} time zone: ${z?tzLabel(z):"none"}`);}};
   const n=f?libAt(facLabel(f)):0;
   return el("div",{class:"modal-back",onclick:e=>{if(e.target===e.currentTarget)close()}},
     el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"lmh"},
       el("h2",{id:"lmh",text:isNew?"Add facility":"Edit facility"}),
-      el("form",{class:"pform",onsubmit:e=>{e.preventDefault();save()}},el("label",{class:"f wide"},"Facility name",fac),el("label",{class:"f wide"},"City",city),
+      el("form",{class:"pform",onsubmit:e=>{e.preventDefault();save()}},el("label",{class:"f wide"},"Facility name",fac),el("label",{class:"f wide"},"City",city),el("label",{class:"f wide"},"Time zone",zone),
         el("div",{class:"row wide",style:"justify-content:space-between"},el("span",{class:"muted small",text:"Shows as “Facility name - City”."}),
           el("div",{class:"row"},el("button",{class:"ghost",type:"button",onclick:close},"Cancel"),isNew?el("button",{class:"ghost",type:"button",onclick:()=>save(true)},"Save & add another"):null,el("button",{class:"primary",type:"submit"},"Save")))),
       n?el("div",{class:"note small",text:`${n} hitter${n>1?"s":""} at this facility will update to the new name.`}):null));}
@@ -1137,7 +1141,7 @@ function facArchiveModal(id){const f=S.lib.facilities[id],lbl=facLabel(f),close=
 function facilitySection(){const all=facList(),q=(D.fac_q||"").toLowerCase(),m=f=>!q||f.label.toLowerCase().includes(q);
   const act=all.filter(f=>!f.archived),arch=all.filter(f=>f.archived);
   const row=(f,btns)=>{const n=libAt(f.label),open=facInOpenEvent(f.label),ne=(EV()?.hitters||[]).filter(h=>h.site===f.label).length;
-    return el("div",{class:"rrow"},el("div",{class:"rmain"},el("strong",{text:f.name}),el("div",{class:"rsub"},el("span",{text:f.city||"No city"}),el("span",{text:n+" hitter"+(n===1?"":"s")+" in library"}))),
+    return el("div",{class:"rrow"},el("div",{class:"rmain"},el("strong",{text:f.name}),el("div",{class:"rsub"},el("span",{text:f.city||"No city"}),el("span",{text:f.tz?`${tzLabel(f.tz)} (${tzAbbr(f.tz,Date.now())})`:"No time zone"}),el("span",{text:n+" hitter"+(n===1?"":"s")+" in library"}))),
       el("div",{class:"racts"},...btns));};
   return[el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Facility Library"}),el("div",{class:"row"},el("span",{class:"chip",text:act.length+" facilit"+(act.length===1?"y":"ies")}),
       el("button",{class:"primary",onclick:()=>{S.modal="addFac";S.focusId="i_lm_f_new";schedule();}},"Add facility"))),
@@ -1162,7 +1166,7 @@ function settingsSection(){const ev=EV();
     el("button",{class:"ghost","aria-label":"Remove division",disabled:ev.divisions.length<2,onclick:()=>saveEvent(x=>x.divisions.splice(i,1),`Removed division ${d.name}`)},"Remove")));
   return [el("section",{class:"panel sec"},el("h2",{text:"Event details"}),
     el("div",{class:"grid"},txt("name","Event name"),txt("date","Date","date"),txt("time","Start time","time"),
-      el("label",{class:"f"},"Time zone",tzSelect("s_tz",ev.tz||"",e=>saveEvent(x=>x.tz=e.target.value,`Time zone: ${tzLabel(e.target.value)}`))),txt("venue","Location"),
+      el("label",{class:"f"},"Time zone",tzSelect("s_tz",ev.tz||"",e=>saveEvent(x=>x.tz=e.target.value,`Time zone: ${tzLabel(e.target.value)}`))),txt("venue","Location")),facilityTimesNote(ev),el("div",{class:"grid"},
       num("rrSets","Round robin sets",1,8),num("balls","Balls per set",1,12),num("mpBalls","Match play balls",1,12))),
     el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Divisions"}),el("span",{class:"chip",text:ev.divisions.length+" division"+(ev.divisions.length===1?"":"s")})),
     el("p",{class:"muted small",style:"margin:0"},"Filled top-down from the standings. Blank size takes everyone left. Play-ins pair the bottom seeds; byes let top seeds skip round one."),
@@ -1556,7 +1560,8 @@ function evModal(){const M=S.evModal;if(!M)return null;const close=()=>{S.evModa
       !isNew&&M.id?el("p",{class:"muted small",style:"margin:0"},"Past event. Changes save to this event only and are logged."):null,
       el("div",{class:"grid"},f("name","Event name"),f("date","Date","date"),f("time","Start time","time"),
         el("label",{class:"f"},"Time zone",tzSelect("em_tz",D.tz,e=>{D.tz=e.target.value;schedule();})),f("venue","Location")),
-      D.time&&D.tz?el("p",{class:"muted small",style:"margin:0"},"Shows as ",el("strong",{text:evTime({date:D.date,time:D.time,tz:D.tz},{local:true})}),myTZ&&myTZ!==D.tz?"":". Hitters in other time zones also see their own local time."):null,
+      D.time&&D.tz?el("p",{class:"muted small",style:"margin:0"},"Shows as ",el("strong",{text:evTime({date:D.date,time:D.time,tz:D.tz},{local:true,tz:myTZ})}),". Hitters see their own facility's time too."):null,
+      D.time&&D.tz?facilityTimesNote({date:D.date,time:D.time,tz:D.tz,siteTZ:(M.id?src.siteTZ:S._event?.siteTZ)||{},hitters:isNew?[]:(src.hitters||[])}):null,
       isNew&&S._event?el("div",{class:"note warn small"},`“${S._event.name}” moves to Past events, and everyone except you is signed out. They sign back in for the new event. The format and divisions carry over; the roster starts empty.`):null,
       el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),
         el("button",{class:"primary",disabled:S.evBusy,onclick:save},S.evBusy?"Saving…":isNew?"Create event":"Save"))));}
@@ -1586,8 +1591,8 @@ async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule()
 // zone (IANA name, e.g. "America/Toronto") and shown with its abbreviation,
 // plus the viewer's own time when they're somewhere else.
 const myTZ=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||"";}catch(e){return"";}})();
-const COMMON_TZ=[["America/St_Johns","Newfoundland"],["America/Halifax","Atlantic"],["America/Toronto","Eastern (Toronto, New York)"],["America/Chicago","Central (Chicago, Winnipeg)"],
-  ["America/Denver","Mountain (Denver, Calgary)"],["America/Phoenix","Arizona"],["America/Vancouver","Pacific (Vancouver, Los Angeles)"],["America/Anchorage","Alaska"],["Pacific/Honolulu","Hawaii"],
+const COMMON_TZ=[["America/St_Johns","Newfoundland"],["America/Halifax","Atlantic"],["America/Toronto","Eastern (Toronto, New York)"],["America/Chicago","Central (Texas, Chicago, Winnipeg)"],
+  ["America/Denver","Mountain (Denver, Calgary)"],["America/Phoenix","Arizona (no daylight saving)"],["America/Vancouver","Pacific (Vancouver, Los Angeles)"],["America/Anchorage","Alaska"],["Pacific/Honolulu","Hawaii"],
   ["Europe/London","UK"],["Europe/Paris","Central Europe"],["Asia/Dubai","Dubai"],["Asia/Kolkata","India"],["Asia/Singapore","Singapore"],["Asia/Tokyo","Japan"],["Australia/Sydney","Sydney"]];
 function tzOffset(tz,ms){try{const p=Object.fromEntries(new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).formatToParts(new Date(ms)).map(x=>[x.type,x.value]));
   return Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-ms;}catch(e){return 0;}}
@@ -1599,9 +1604,29 @@ const tzLabel=tz=>(COMMON_TZ.find(x=>x[0]===tz)||[])[1]||tz.replace(/_/g," ");
 // "9:30 AM EST" — and, with local:true, "(10:30 AM your time)" if the viewer is elsewhere.
 function evTime(ev,o={}){if(!ev||!ev.time)return"";const t=timeText(ev.time);if(!ev.tz)return t;const ms=startMs(ev);if(ms==null)return t;
   let out=t+" "+tzAbbr(ev.tz,ms);
-  if(o.local&&myTZ&&myTZ!==ev.tz&&tzOffset(myTZ,ms)!==tzOffset(ev.tz,ms)){const lt=new Date(ms);const sameDay=lt.toLocaleDateString("en-CA")===ev.date;
-    out+=` (${lt.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}${sameDay?"":" "+lt.toLocaleDateString([], {weekday:"short"})} your time)`;}
+  const vz=o.local?(o.tz||viewerTZ()):"";
+  if(vz&&vz!==ev.tz&&tzOffset(vz,ms)!==tzOffset(ev.tz,ms)){const lt=new Date(ms);const sameDay=lt.toLocaleDateString("en-CA",{timeZone:vz})===ev.date;
+    out+=` (${lt.toLocaleTimeString([], {timeZone:vz,hour:"numeric",minute:"2-digit"})}${sameDay?"":" "+lt.toLocaleDateString([], {timeZone:vz,weekday:"short"})} your time)`;}
   return out;}
+
+// Copies each facility's time zone into the live event, so hitters' phones
+// (which can't read the private library) know where each facility is.
+function syncSiteTZ(){const ev=EV();if(!ev||!S.libLoaded||!S.lib||S.tzBusy)return;const map={};
+  for(const f of Object.values(S.lib.facilities||{}))if(f&&f.tz&&!f.archived)map[facLabel(f)]=f.tz;
+  if(JSON.stringify(map)===JSON.stringify(ev.siteTZ||{}))return;S.tzBusy=true;saveEvent(e=>{e.siteTZ=map;}).finally(()=>{S.tzBusy=false;});}
+// The viewer's zone: their facility's, if they're linked to one; otherwise their phone's.
+function viewerTZ(){const ev=EV(),a=(ev?.assign||{})[S.me.id]||[];
+  for(const x of a){const site=x.startsWith("loc:")?x.slice(4):x.startsWith("for:")?null:hitter(x)?.site;const z=site&&ev.siteTZ?.[site];if(z)return z;}
+  return myTZ;}
+// Start time at each facility in the roster (or all facilities with a zone).
+function facilityTimes(ev){const ms=startMs(ev);if(ms==null)return[];const z=ev.siteTZ||{};
+  const sites=new Set((ev.hitters||[]).filter(h=>h.status!=="withdrawn").map(h=>h.site));const use=Object.keys(z).filter(s=>!sites.size||sites.has(s));
+  const groups=new Map();for(const s of use){const k=z[s];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(s.split(" - ").pop());}
+  const evDay=ev.date;
+  return [...groups].map(([zone,names])=>{const d=new Date(ms);const t=d.toLocaleTimeString([], {timeZone:zone,hour:"numeric",minute:"2-digit"});
+    const day=d.toLocaleDateString("en-CA",{timeZone:zone});return `${names.join(", ")} ${t} ${tzAbbr(zone,ms)}${day!==evDay?" "+d.toLocaleDateString([], {timeZone:zone,weekday:"short"}):""}`;})
+    .sort();}
+function facilityTimesNote(ev){const t=facilityTimes(ev);if(!t.length)return null;return el("p",{class:"muted small",style:"margin:0"},el("strong",{text:"At each facility: "}),t.join(" · "));}
 function tzSelect(id,value,onchange){const all=(()=>{try{return Intl.supportedValuesOf("timeZone");}catch(e){return[];}})();const common=new Set(COMMON_TZ.map(x=>x[0]));
   return el("select",{id,value:value||"",onchange},el("option",{value:""},"Choose a time zone"),
     el("optgroup",{label:"Common"},...COMMON_TZ.map(([z,l])=>el("option",{value:z},l))),
