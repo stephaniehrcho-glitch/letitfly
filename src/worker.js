@@ -13,7 +13,7 @@ const MAX_DOC_BYTES = 900_000;
 // Collections a signed-in hitter or scorekeeper may write, only at <coll>/<their id>.
 const SELF_WRITE = new Set(["joins", "rr", "commits", "reveals", "vault"]);
 // What a spectator with the event code can read: enough to draw the Tracker.
-const SPECTATOR_READ = new Set(["event", "admin", "rr", "commits", "reveals"]);
+const SPECTATOR_READ = new Set(["event", "admin", "rr", "commits", "reveals", "archive"]);
 const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24);
 // Collections only the director can read (vault: director, or the owner of that doc).
 const OWNER_READ = new Set(["private"]);

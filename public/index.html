@@ -278,6 +278,9 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .flagdot{display:inline-block;min-width:15px;height:15px;line-height:15px;border-radius:8px;font-size:10px;font-weight:700;text-align:center;margin-left:3px;cursor:pointer;color:#fff;vertical-align:middle}
 .flagdot.conf{background:var(--bad)}.flagdot.late{background:#b7791f}
 .aside{display:flex;gap:8px;align-items:center;flex-basis:100%;padding:6px 0 0;flex-wrap:wrap}
+.pastbtn{margin-left:auto}
+.pastrow{width:100%;text-align:left;display:flex;align-items:center;gap:10px;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 4px}
+.pastbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 </style>
 
 <header class="band"><div class="wrap">
@@ -578,7 +581,7 @@ function render(){const app=document.getElementById("app");const a=document.acti
     setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
   if(S.me.isOwner){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
-function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
+function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:(S.past&&S.archive?.[S.past]?.event)||EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
   document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
   if(gated){document.getElementById("tabs").replaceChildren();return;}
   if(!signedIn){document.getElementById("tabs").replaceChildren(
@@ -620,18 +623,25 @@ function rrRowModal(hid){const ev=EV(),h=hitter(hid),n=ev.rrSets,close=()=>{S.su
         el("button",{type:"submit",hidden:true,tabindex:"-1","aria-hidden":"true"})),
       el("div",{class:"row",style:"justify-content:space-between"},undoBtn(),el("div",{class:"row"},el("button",{class:"ghost",onclick:close},"Cancel"),el("button",{class:"primary",onclick:save},"Save"))),
       el("p",{class:"muted small",style:"margin:0"},"Director values override any entry for that set and are recorded in the Log.")));}
-function vTracker(){const out=[];
+function vTracker(){
+  if(S.pastOpen&&!S.past)return pastList();
+  if(S.past){const a=S.archive?.[S.past];if(a)return pastView(S.past,a);S.past=null;}
+  return vTrackerLive();}
+function vTrackerLive(){const out=[];
   if(S.modal&&S.modal.startsWith("enter:")&&S.me.isOwner&&EV()){const h=hitter(S.modal.slice(6));if(h)out.push(enterSheet(h));}
   if(S.noDb)out.push(el("div",{class:"note warn"},"Live event data loads on the published page. Open the Director tab to test how any field size splits into divisions and brackets."));
   if(S.stale)out.push(el("div",{class:"note warn"},"Can't reach the live event data yet. What you see may be out of date."));
   const ev=EV();
-  if(!ev){out.push(el("div",{class:"panel sec"},el("h2",{text:"No event set up yet"}),
+  if(!ev){if(!S.past&&pastEvents().length)out.push(el("div",{class:"subnav"},el("button",{class:"pastbtn",onclick:()=>{S.pastOpen=true;schedule();}},"Past events")));
+    out.push(el("div",{class:"panel sec"},el("h2",{text:"No event set up yet"}),
     el("p",{class:"muted"},S.me.isOwner?"Open the Director tab to name the event, set the format and add hitters. Standings and brackets will show here live.":"The director hasn't set up this event yet. Standings and brackets will show here live once they do.")));return out;}
   // brackets first in match play
   if(ev.seeding&&S.brackets.length){const mpSec=()=>el("section",{class:"sec mp"},el("div",{class:"sechead"},el("h2",{text:"Match Play"}),el("span",{class:"muted small",text:`1 set × ${ev.mpBalls} balls per match · longer drive advances`})),S.brackets.map(divisionSection));
     const t=S.ttab||"mp";
-    out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Tracker sections"},[["rr","Round Robin"],["mp","Match Play"]].map(([k,l])=>el("button",{role:"tab","aria-selected":t===k?"true":"false",onclick:()=>{S.ttab=k;schedule();}},l))));
+    out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Tracker sections"},[["rr","Round Robin"],["mp","Match Play"]].map(([k,l])=>el("button",{role:"tab","aria-selected":t===k?"true":"false",onclick:()=>{S.ttab=k;schedule();}},l)),
+      !S.past&&pastEvents().length?el("button",{class:"pastbtn",onclick:()=>{S.pastOpen=true;schedule();window.scrollTo(0,0);}},"Past events"):null));
     out.push(t==="rr"?standings():mpSec());return out;}
+  if(!S.past&&pastEvents().length)out.push(el("div",{class:"subnav"},el("button",{class:"pastbtn",onclick:()=>{S.pastOpen=true;schedule();window.scrollTo(0,0);}},"Past events")));
   out.push(standings());
   if(!ev.seeding)out.push(projectedSection());
   return out;}
@@ -1413,6 +1423,47 @@ function restoreCard(){const R=S.restore=S.restore||{file:null,data:null,keepLib
       el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:R.busy,onclick:go},R.busy?"Restoring…":"Restore this event"),el("button",{class:"ghost",disabled:R.busy,onclick:()=>{S.restore=null;schedule();}},"Cancel"))):null,
     R.err?el("div",{class:"note bad",text:R.err}):null,R.done?el("div",{class:"note",text:R.done}):null);}
 
+
+/* ---------- past events ---------- */
+// Archived events, newest first. Empty ones (no hitters) only show to the director,
+// and a copy of the event that's live right now isn't listed twice.
+function pastEvents(){const cur=EV(),sig=e=>[(e?.eid||""),e?.name||"",e?.date||""].join("|");
+  return Object.entries(S.archive||{}).filter(([id,a])=>a&&a.event&&(S.me.isOwner||(a.event.hitters||[]).length)&&!(cur&&sig(a.event)===sig(cur)))
+    .sort((x,y)=>(y[1].event.date||"").localeCompare(x[1].event.date||"")||(y[1].archivedAt||0)-(x[1].archivedAt||0));}
+// Shows an archived event with the normal Tracker logic, read-only.
+function withPast(a,fn){const keep={event:S.event,admin:S.admin,brackets:S.brackets,keyIndex:S.keyIndex,aheadUse:S.aheadUse,me:S.me};
+  S.event=a.event;S.admin=Object.assign({},keep.admin||{},{rr:a.admin?.rr||{},mpWinner:a.admin?.mpWinner||{},mpVal:a.admin?.mpVal||{}});
+  S.me=Object.assign({},keep.me,{isOwner:false});
+  try{computeAll();return fn();}finally{Object.assign(S,keep);}}
+function pastWinners(a){try{return withPast(a,()=>(S.brackets||[]).filter(b=>b.champ&&b.champ!=="BYE").map(b=>[b.div.name,nameOf(b.champ)]));}catch(e){return[];}}
+const dateText=d=>d?new Date(d+"T12:00").toLocaleDateString([], {weekday:"short",month:"short",day:"numeric",year:"numeric"}):"";
+function pastList(){const list=pastEvents();
+  return[el("div",{class:"sechead"},el("h2",{text:"Past events"}),el("button",{class:"ghost",onclick:()=>{S.pastOpen=false;schedule();}},"← Current event")),
+    el("div",{class:"list"},list.length?list.map(([id,a])=>{const ev=a.event,w=pastWinners(a),n=(ev.hitters||[]).filter(h=>h.status!=="withdrawn").length;
+      return el("button",{class:"li pastrow",onclick:()=>{S.past=id;S.pastOpen=false;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}},
+        el("span",{class:"grow"},el("strong",{text:ev.name||"Event"}),el("span",{class:"muted small",text:` · ${dateText(ev.date)} · ${n} hitter${n===1?"":"s"}`}),
+          w.length?el("div",{class:"small",style:"margin-top:4px"},...w.map(([d,nm])=>el("span",{class:"chip on",style:"margin-right:6px",text:`${d}: ${nm}`}))):el("div",{class:"muted small",text:ev.seeding?"":"Round robin only"})),
+        el("span",{class:"muted",text:"View →"}));}):el("div",{class:"muted li",text:"Finished events will be listed here."}))];}
+function pastView(id,a){const ev=a.event,isDir=S.me.isOwner;const st=S.pastConfirm===id;
+  const bar=el("div",{class:"note pastbar"},el("span",{class:"grow"},el("strong",{text:"Past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. Read-only.`),
+    el("button",{class:"ghost",onclick:()=>{S.past=null;S.pastOpen=true;S.pastConfirm=null;schedule();}},"← All past events"),
+    el("button",{class:"ghost",onclick:()=>{S.past=null;S.pastOpen=false;S.pastConfirm=null;schedule();}},"Current event"),
+    isDir&&!st?el("button",{onclick:()=>{S.pastConfirm=id;schedule();}},"Make this the current event"):null);
+  const out=[bar];
+  if(isDir&&st)out.push(el("div",{class:"note warn"},`Make “${ev.name}” the current event again? Everyone will see it live instead of “${EV()?.name||"the current event"}”, which is saved to Past events first. Nothing is deleted.`,
+    el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:S.pastBusy,onclick:()=>makeCurrent(id,a)},S.pastBusy?"Switching…":"Yes, make it current"),el("button",{class:"ghost",onclick:()=>{S.pastConfirm=null;schedule();}},"Cancel"))));
+  out.push(...withPast(a,()=>[].concat(vTrackerLive()).filter(x=>x&&!(x.classList&&x.querySelector&&x.querySelector(".pastbtn")&&x.children.length===1))));
+  return out;}
+async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule();
+  try{const cur=EV();
+    if(cur)await write("archive/"+(cur.eid||"e0")+"-"+Date.now().toString(36),{event:clone(cur),admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{},mpVal:S.admin?.mpVal||{}},archivedAt:Date.now()});
+    const ad=Object.assign(clone(S.admin||{}),{rr:a.admin?.rr||{},mpWinner:a.admin?.mpWinner||{},mpVal:a.admin?.mpVal||{},undo:[]});
+    ad.log=[{at:Date.now(),ev:a.event.eid||"",t:`Made “${a.event.name}” (${a.event.date||"no date"}) the current event from Past events.${cur?` “${cur.name}” was saved to Past events first.`:""}`}].concat(ad.log||[]);
+    await LIF.importDocs({"event/main":a.event,"admin/state":ad},{});
+    S.past=null;S.pastConfirm=null;toast("Done. Everyone now sees this event.");}
+  catch(x){toast(x.network?"You're offline. Switching events needs a connection.":"Couldn't switch: "+x.message);}
+  S.pastBusy=false;schedule();}
+
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
   const pick=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;st.busy=true;st.err="";schedule();
@@ -1451,6 +1502,7 @@ render();
   db.doc("private/hitters").onSnapshot(s=>{S.priv=s.exists?s.data():(S.me.isOwner?{emails:{}}:null);S.privLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
   db.doc("private/library").onSnapshot(s=>{setTimeout(ensureCode,0);S.lib=s.exists?s.data():(S.me.isOwner?{hitters:{}}:null);S.libLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
   for(const col of ["joins","rr","commits","reveals"])db.collection(col).onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S[col]=o;schedule();},err);
+  db.collection("archive").onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S.archive=o;schedule();},()=>{});
   db.collection("vault").onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S.vault=o;schedule();},err);
   schedule();})();
 })();
