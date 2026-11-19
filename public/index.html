@@ -281,6 +281,8 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .pastbtn{margin-left:auto}
 .pastrow{width:100%;text-align:left;display:flex;align-items:center;gap:10px;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 4px}
 .pastbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.collapser{display:flex;width:100%;justify-content:space-between;align-items:center;background:transparent;border:0;padding:0;cursor:pointer;text-align:left}
+.collapser h3{margin:0!important}.collapser[aria-expanded="true"]{margin-bottom:10px}
 .evcard h3{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .livecard{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--panel,transparent))}
 .livecard h3{color:var(--accent)}
@@ -627,7 +629,7 @@ function render(){const app=document.getElementById("app");const a=document.acti
   if(S.me.isOwner&&!S.past){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
 function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
-  document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",timeText(ev.time),phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
+  document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",evTime(ev,{local:true}),phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
   if(gated){document.getElementById("tabs").replaceChildren();return;}
   if(!signedIn){document.getElementById("tabs").replaceChildren(
     el("a",{href:"#",class:"acct",text:"Leave event",onclick:e=>{e.preventDefault();LIF.leaveEvent();S.spectate=false;S.role=null;LIF.role(null);location.hash="";location.reload();}}),
@@ -1159,7 +1161,8 @@ function settingsSection(){const ev=EV();
     el("select",{id:"df_"+d.id,"aria-label":"Extra hitters",value:d.fill,onchange:e=>saveEvent(x=>x.divisions[i].fill=e.target.value,`${d.name}: ${e.target.value==="bye"?"byes":"play-ins"}`)},el("option",{value:"playin"},"Play-ins"),el("option",{value:"bye"},"Byes")),
     el("button",{class:"ghost","aria-label":"Remove division",disabled:ev.divisions.length<2,onclick:()=>saveEvent(x=>x.divisions.splice(i,1),`Removed division ${d.name}`)},"Remove")));
   return [el("section",{class:"panel sec"},el("h2",{text:"Event details"}),
-    el("div",{class:"grid"},txt("name","Event name"),txt("date","Date","date"),txt("time","Start time","time"),txt("venue","Location"),
+    el("div",{class:"grid"},txt("name","Event name"),txt("date","Date","date"),txt("time","Start time","time"),
+      el("label",{class:"f"},"Time zone",tzSelect("s_tz",ev.tz||"",e=>saveEvent(x=>x.tz=e.target.value,`Time zone: ${tzLabel(e.target.value)}`))),txt("venue","Location"),
       num("rrSets","Round robin sets",1,8),num("balls","Balls per set",1,12),num("mpBalls","Match play balls",1,12))),
     el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Divisions"}),el("span",{class:"chip",text:ev.divisions.length+" division"+(ev.divisions.length===1?"":"s")})),
     el("p",{class:"muted small",style:"margin:0"},"Filled top-down from the standings. Blank size takes everyone left. Play-ins pair the bottom seeds; byes let top seeds skip round one."),
@@ -1418,7 +1421,7 @@ function backupSection(){const ev=EV(),hasMp=!!(S.brackets&&S.brackets.length);
 function printView(){const ev=EV(),n=ev.rrSets,out=[];
   out.push(el("div",{class:"printbar noprint"},el("button",{class:"primary",onclick:()=>window.print()},"Print"),el("button",{onclick:()=>{S.print=false;if(S.pastPrint){leavePast();S.pastPrint=false;}schedule();}},"Close"),
     el("span",{class:"muted",text:"Tip: choose Portrait for the roster and Landscape if brackets look cramped."})));
-  const head=(t)=>el("div",{class:"phead"},el("div",{},el("strong",{text:ev.name||"Event"}),el("span",{text:[ev.date||"",timeText(ev.time),ev.venue||"",ev.code?"Code "+ev.code:""].filter(Boolean).join(" · ")})),el("h2",{text:t}));
+  const head=(t)=>el("div",{class:"phead"},el("div",{},el("strong",{text:ev.name||"Event"}),el("span",{text:[ev.date||"",evTime(ev),ev.venue||"",ev.code?"Code "+ev.code:""].filter(Boolean).join(" · ")})),el("h2",{text:t}));
   // Roster and round robin
   const rows=ranking().slice().sort((a,b)=>(a.h.site||"").localeCompare(b.h.site||"")||a.h.name.localeCompare(b.h.name));
   out.push(el("section",{class:"psheet"},head(`Roster and round robin · ${n} sets × ${ev.balls} balls`),
@@ -1502,13 +1505,13 @@ function pastView(id,a){const ev=a.event;
 function eventStatus(ev,isLive){if(isLive)return["Live","live"];if(ev.phase==="final"||(ev.seeding&&ev.phase==="match"))return["Complete","done"];return[phaseName(ev.phase),""];}
 function dateBlock(ev){const d=ev.date?new Date(ev.date+"T12:00"):null;
   return el("div",{class:"datebk"},el("span",{class:"m",text:d?d.toLocaleDateString([], {month:"short"}):"—"}),el("span",{class:"d",text:d?String(d.getDate()):""}),
-    el("span",{class:"w",text:d?d.toLocaleDateString([], {weekday:"short"}):"No date"}),ev.time?el("span",{class:"t",text:timeText(ev.time)}):null);}
+    el("span",{class:"w",text:d?d.toLocaleDateString([], {weekday:"short"}):"No date"}),ev.time?el("span",{class:"t",text:evTime(ev)}):null);}
 function eventsSection(){const live=S._event,list=pastEvents();
   const row=(ev,isLive,id,a)=>{const key=id||"live",n=(ev.hitters||[]).filter(h=>h.status!=="withdrawn").length,[st,stc]=eventStatus(ev,isLive),menu=S.menuFor===key,ask=id&&S.pastConfirm===id;
     return el("div",{class:"evrow"},dateBlock(ev),
       el("div",{class:"evmain"},
         el("div",{class:"evtitle"},el("span",{class:"chip stat "+stc,text:st}),el("strong",{text:ev.name||"Event"})),
-        el("div",{class:"muted small",text:[ev.venue,`${n} hitter${n===1?"":"s"}`,isLive?phaseName(ev.phase):null,!isLive&&a.editedAt?"edited "+tstr(a.editedAt):null].filter(Boolean).join(" · ")}),
+        el("div",{class:"muted small",text:[evTime(ev,{local:true}).includes("your time")?evTime(ev,{local:true}):null,ev.venue,`${n} hitter${n===1?"":"s"}`,isLive?phaseName(ev.phase):null,!isLive&&a.editedAt?"edited "+tstr(a.editedAt):null].filter(Boolean).join(" · ")}),
         el("div",{class:"row evact"},
           isLive?el("button",{class:"primary",onclick:()=>{S.dtab=ev.phase==="setup"?"settings":"flow";schedule();window.scrollTo(0,0);}},"Manage"):null,
           el("button",{class:isLive?"":"primary",onclick:()=>{if(isLive)goView("tracker");else{S.past=id;S.pastEdit=true;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}}},isLive?"Scores":"Edit scores"),
@@ -1525,15 +1528,21 @@ function eventsSection(){const live=S._event,list=pastEvents();
       el("button",{class:"primary",onclick:()=>{S.evModal={kind:"new"};schedule();}},"+ Add New Event")),
     el("section",{class:"panel sec evcard livecard"},el("h3",{text:"Live event"}),
       live?row(live,true,null,null):el("p",{class:"muted",style:"margin:0"},"No live event. Tap Add New Event to set one up.")),
-    el("section",{class:"panel sec evcard"},el("h3",{text:"Past events"}),
-      list.length?el("div",{},...list.map(([id,a])=>row(a.event,false,id,a))):el("p",{class:"muted",style:"margin:0"},"Past events appear here after you add a new event.")),
+    (()=>{const open=pastOpenPref();
+      return el("section",{class:"panel sec evcard"},
+        el("button",{class:"collapser","aria-expanded":open?"true":"false",onclick:()=>{pastOpenPref(!open);schedule();}},
+          el("h3",{text:`Past events${list.length?" ("+list.length+")":""}`}),el("span",{class:"muted small",text:open?"Hide ▴":"Show ▾"})),
+        open?(list.length?el("div",{},...list.map(([id,a])=>row(a.event,false,id,a))):el("p",{class:"muted",style:"margin:0"},"Past events appear here after you add a new event.")):null);})(),
     restoreCard()];}
+// Past events card open/closed, remembered on this device (closed by default).
+function pastOpenPref(v){try{if(v!==undefined)localStorage.setItem("htg_past_open",v?"1":"0");return localStorage.getItem("htg_past_open")==="1";}catch(e){if(v!==undefined)S.pastOpenMem=v;return!!S.pastOpenMem;}}
 // Pop-ups: add a new event, or edit an event's details.
 function evModal(){const M=S.evModal;if(!M)return null;const close=()=>{S.evModal=null;S.evDraft=null;schedule();};
   const isNew=M.kind==="new",src=isNew?null:(M.id?S.archive?.[M.id]?.event:S._event);if(!isNew&&!src){S.evModal=null;return null;}
-  const D=S.evDraft=S.evDraft||(isNew?{name:"Satellite League Event",date:new Date().toISOString().slice(0,10),time:"",venue:S._event?.venue||""}:{name:src.name||"",date:src.date||"",time:src.time||"",venue:src.venue||""});
-  const f=(k,label,type)=>el("label",{class:"f"},label,el("input",{id:"em_"+k,type:type||"text",value:D[k]||"",oninput:e=>D[k]=e.target.value}));
-  const save=async()=>{if(S.evBusy)return;const patch={name:D.name.trim(),date:D.date,time:D.time,venue:D.venue.trim()};if(!patch.name)return toast("The event needs a name");
+  const D=S.evDraft=S.evDraft||(isNew?{name:"Satellite League Event",date:new Date().toISOString().slice(0,10),time:"",tz:S._event?.tz||myTZ,venue:S._event?.venue||""}:{name:src.name||"",date:src.date||"",time:src.time||"",tz:src.tz||"",venue:src.venue||""});
+  const f=(k,label,type)=>el("label",{class:"f"},label,el("input",{id:"em_"+k,type:type||"text",value:D[k]||"",oninput:e=>D[k]=e.target.value,onchange:()=>{if(k==="date"||k==="time")schedule();}}));
+  const save=async()=>{if(S.evBusy)return;const patch={name:D.name.trim(),date:D.date,time:D.time,tz:D.tz||"",venue:D.venue.trim()};
+    if(patch.time&&!patch.tz)return toast("Choose the time zone for the start time");if(!patch.name)return toast("The event needs a name");
     S.evBusy=true;schedule();
     try{if(isNew){if(S._event){await startNewEvent();}else{await saveEvent(()=>{},"Created the event");}
         await saveEvent(e=>Object.assign(e,patch),`New event: ${patch.name}`);S.dtab="settings";toast("New event ready. Add the format and hitters next.");}
@@ -1545,7 +1554,9 @@ function evModal(){const M=S.evModal;if(!M)return null;const close=()=>{S.evModa
     el("div",{class:"modal panel sec",role:"dialog","aria-modal":"true","aria-labelledby":"emh",style:"max-width:460px"},
       el("h2",{id:"emh",text:isNew?"Add new event":"Event details"}),
       !isNew&&M.id?el("p",{class:"muted small",style:"margin:0"},"Past event. Changes save to this event only and are logged."):null,
-      el("div",{class:"grid"},f("name","Event name"),f("date","Date","date"),f("time","Start time","time"),f("venue","Location")),
+      el("div",{class:"grid"},f("name","Event name"),f("date","Date","date"),f("time","Start time","time"),
+        el("label",{class:"f"},"Time zone",tzSelect("em_tz",D.tz,e=>{D.tz=e.target.value;schedule();})),f("venue","Location")),
+      D.time&&D.tz?el("p",{class:"muted small",style:"margin:0"},"Shows as ",el("strong",{text:evTime({date:D.date,time:D.time,tz:D.tz},{local:true})}),myTZ&&myTZ!==D.tz?"":". Hitters in other time zones also see their own local time."):null,
       isNew&&S._event?el("div",{class:"note warn small"},`“${S._event.name}” moves to Past events, and everyone except you is signed out. They sign back in for the new event. The format and divisions carry over; the roster starts empty.`):null,
       el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),
         el("button",{class:"primary",disabled:S.evBusy,onclick:save},S.evBusy?"Saving…":isNew?"Create event":"Save"))));}
@@ -1569,10 +1580,38 @@ async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule()
   S.pastBusy=false;schedule();}
 
 
+
+/* ---------- time zones ---------- */
+// Events run across time zones, so a start time is stored with the event's
+// zone (IANA name, e.g. "America/Toronto") and shown with its abbreviation,
+// plus the viewer's own time when they're somewhere else.
+const myTZ=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||"";}catch(e){return"";}})();
+const COMMON_TZ=[["America/St_Johns","Newfoundland"],["America/Halifax","Atlantic"],["America/Toronto","Eastern (Toronto, New York)"],["America/Chicago","Central (Chicago, Winnipeg)"],
+  ["America/Denver","Mountain (Denver, Calgary)"],["America/Phoenix","Arizona"],["America/Vancouver","Pacific (Vancouver, Los Angeles)"],["America/Anchorage","Alaska"],["Pacific/Honolulu","Hawaii"],
+  ["Europe/London","UK"],["Europe/Paris","Central Europe"],["Asia/Dubai","Dubai"],["Asia/Kolkata","India"],["Asia/Singapore","Singapore"],["Asia/Tokyo","Japan"],["Australia/Sydney","Sydney"]];
+function tzOffset(tz,ms){try{const p=Object.fromEntries(new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).formatToParts(new Date(ms)).map(x=>[x.type,x.value]));
+  return Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-ms;}catch(e){return 0;}}
+// The moment an event starts, from its date, time and zone.
+function startMs(ev){if(!ev||!ev.date||!ev.time)return null;const [y,mo,d]=ev.date.split("-").map(Number),[h,mi]=ev.time.split(":").map(Number);if([y,mo,d,h].some(isNaN))return null;
+  const guess=Date.UTC(y,mo-1,d,h,mi||0);if(!ev.tz)return null;let t=guess-tzOffset(ev.tz,guess);t=guess-tzOffset(ev.tz,t);return t;}
+const tzAbbr=(tz,ms)=>{try{return new Intl.DateTimeFormat("en-US",{timeZone:tz,timeZoneName:"short"}).formatToParts(new Date(ms)).find(x=>x.type==="timeZoneName")?.value||"";}catch(e){return"";}};
+const tzLabel=tz=>(COMMON_TZ.find(x=>x[0]===tz)||[])[1]||tz.replace(/_/g," ");
+// "9:30 AM EST" — and, with local:true, "(10:30 AM your time)" if the viewer is elsewhere.
+function evTime(ev,o={}){if(!ev||!ev.time)return"";const t=timeText(ev.time);if(!ev.tz)return t;const ms=startMs(ev);if(ms==null)return t;
+  let out=t+" "+tzAbbr(ev.tz,ms);
+  if(o.local&&myTZ&&myTZ!==ev.tz&&tzOffset(myTZ,ms)!==tzOffset(ev.tz,ms)){const lt=new Date(ms);const sameDay=lt.toLocaleDateString("en-CA")===ev.date;
+    out+=` (${lt.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}${sameDay?"":" "+lt.toLocaleDateString([], {weekday:"short"})} your time)`;}
+  return out;}
+function tzSelect(id,value,onchange){const all=(()=>{try{return Intl.supportedValuesOf("timeZone");}catch(e){return[];}})();const common=new Set(COMMON_TZ.map(x=>x[0]));
+  return el("select",{id,value:value||"",onchange},el("option",{value:""},"Choose a time zone"),
+    el("optgroup",{label:"Common"},...COMMON_TZ.map(([z,l])=>el("option",{value:z},l))),
+    all.length?el("optgroup",{label:"All time zones"},...all.filter(z=>!common.has(z)).map(z=>el("option",{value:z},z.replace(/_/g," ")))):null,
+    value&&!common.has(value)&&!all.includes(value)?el("option",{value},value):null);}
+
 /* ---------- event details for any event ---------- */
 const timeText=t=>{if(!t)return"";const [h,m]=t.split(":").map(Number);if(isNaN(h))return t;return new Date(2000,0,1,h,m||0).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});};
 // Saves name/date/time/location for the live event (id null) or a past event.
-async function saveDetails(id,patch){const label=Object.entries(patch).map(([k,v])=>`${{name:"name",date:"date",time:"start time",venue:"location"}[k]||k} → ${v||"(blank)"}`).join(", ");
+async function saveDetails(id,patch){const label=Object.entries(patch).map(([k,v])=>`${{name:"name",date:"date",time:"start time",tz:"time zone",venue:"location"}[k]||k} → ${(k==="tz"&&v?tzLabel(v):v)||"(blank)"}`).join(", ");
   if(!id)return saveEvent(e=>Object.assign(e,patch),"Event details: "+label);
   const arc=clone(S.archive[id]);Object.assign(arc.event,patch);arc.editedAt=Date.now();S.archive[id]=arc;schedule();
   try{await write("archive/"+id,arc);const L=clone(S._admin)||{};L.log=[{at:Date.now(),t:`Past event “${arc.event.name}”: details ${label}`,ev:S._event?.eid||""}].concat(L.log||[]).slice(0,300);S._admin=L;await write("admin/state",L);toast("Saved");}
