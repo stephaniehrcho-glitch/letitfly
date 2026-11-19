@@ -496,7 +496,7 @@ async function undoLast(){const u=undoList(),last=u[u.length-1];if(!last)return 
   await saveAdmin(a=>{applyChanges(a,last.prev);const k=a.undo.findIndex(x=>x.at===last.at&&x.label===last.label);if(k>=0)a.undo.splice(k,1);},"Undid: "+last.label);toast("Undone");}
 function undoBtn(){const u=undoList(),last=u[u.length-1];return el("button",{class:"pill",lockReason:last?null:"No director number changes to undo yet.",onclick:undoLast},last?"↶ Undo last change":"↶ Undo");}
 async function startNewEvent(){const ev=clone(EV()),old=ev.eid||"e0";
-  try{await write("archive/"+old,{event:ev,admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{}},archivedAt:Date.now()});}catch(e){toast("Couldn't archive this event, so nothing changed.");return;}
+  try{await write("archive/"+old,{event:ev,admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{},mpVal:S.admin?.mpVal||{}},archivedAt:Date.now()});}catch(e){toast("Couldn't archive this event, so nothing changed.");return;}
   const d=defaultEvent();const nev=Object.assign(d,{rrSets:ev.rrSets,balls:ev.balls,mpBalls:ev.mpBalls,divisions:ev.divisions,eid:rid("e")});
   await saveAdmin(a=>{a.rr={};a.mpWinner={};a.mpVal={};});S.event=nev;await write("event/main",nev);S.dtab="settings";S.seedDraft={};
   let out="";try{const r=await LIF.signOutOthers();out=r.signedOut?` Signed out ${r.signedOut} device${r.signedOut===1?"":"s"}.`:"";}catch(e){}
@@ -1348,6 +1348,7 @@ function backupSection(){const ev=EV(),hasMp=!!(S.brackets&&S.brackets.length);
   return[el("section",{class:"panel sec"},el("h2",{text:"Backup"}),
       el("p",{class:"muted",style:"margin:0"},"Downloads everything: this event, the Hitter and Facility Libraries, logins and scores. Keep a copy before and after each event. It can be loaded back in if anything ever goes wrong."),
       el("div",{class:"row"},el("button",{class:"primary",onclick:downloadBackup},"Download backup"))),
+    restoreCard(),
     el("section",{class:"panel sec"},el("h2",{text:"Results export"}),
       el("p",{class:"muted",style:"margin:0"},"Spreadsheet files (CSV) that open in Excel, Numbers or Google Sheets."),
       el("div",{class:"row",style:"flex-wrap:wrap"},
@@ -1384,6 +1385,33 @@ function printView(){const ev=EV(),n=ev.rrSets,out=[];
     out.push(el("section",{class:"psheet"},head(`${b.div.name} · match play${projected?" (projected from current standings)":""}`),
       el("p",{class:"pmuted",text:`${shapeText(b.div.seeds.length,b.div.fill)} · ${ev.mpBalls} balls per set · longer drive advances`}),...blocks));}
   return out;}
+
+
+/* ---------- restore from a backup or export file ---------- */
+function restoreCard(){const R=S.restore=S.restore||{file:null,data:null,keepLib:false,busy:false,err:"",done:""};
+  const pick=async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;R.err="";R.done="";
+    try{const j=JSON.parse(await f.text());if(!j.docs||!j.docs["event/main"])throw new Error("That file isn't a Hit The Grid backup or export.");R.file=f.name;R.data=j;}
+    catch(x){R.err=x.message||"Couldn't read that file";R.file=null;R.data=null;}schedule();};
+  const go=async()=>{if(R.busy||!R.data)return;R.busy=true;R.err="";schedule();
+    try{const cur=EV();
+      // Keep the current event in the archive first, so nothing is lost.
+      if(cur)await write("archive/"+(cur.eid||"e0")+"-"+Date.now().toString(36),{event:clone(cur),admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{},mpVal:S.admin?.mpVal||{}},archivedAt:Date.now()});
+      const docs=clone(R.data.docs);if(R.keepLib)delete docs["private/library"];
+      // The note goes into the restored log itself (writing it afterwards would overwrite what was restored).
+      const ad=docs["admin/state"]=docs["admin/state"]||{};ad.log=[{at:Date.now(),ev:docs["event/main"].eid||"",
+        t:`Restored “${docs["event/main"].name||"event"}” from ${R.file}${R.keepLib?" (kept current libraries)":""}.${cur?` The event that was showing, “${cur.name}”, was saved to the archive first.`:""}`}].concat(ad.log||[]);
+      const remap=R.data.ownerId&&R.data.ownerId!==S.me.id?{[R.data.ownerId]:S.me.id}:{};
+      const r=await LIF.importDocs(docs,remap);
+      R.done=`Restored ${r.imported} records. Reloading…`;schedule();setTimeout(()=>location.reload(),1200);}
+    catch(x){R.err=x.network?"You're offline. Restoring needs a connection.":(x.message||"Restore failed");R.busy=false;schedule();}};
+  const ev=R.data?.docs?.["event/main"];
+  return el("section",{class:"panel sec"},el("h2",{text:"Restore from a file"}),
+    el("p",{class:"muted",style:"margin:0"},"Bring back an event from a backup you downloaded here, or from the export file of the earlier version. The event showing now is saved to the archive first."),
+    el("div",{class:"row"},el("label",{class:"btn"},R.data?"Choose a different file":"Choose backup file",el("input",{type:"file",accept:".json,application/json",style:"display:none",disabled:R.busy,onchange:pick}))),
+    R.data?el("div",{class:"note warn"},el("strong",{text:`Restore “${ev.name||"event"}”${ev.date?" ("+ev.date+")":""} from ${R.file}?`})," It replaces the event showing now, including its roster, scores and brackets, for everyone.",
+      el("label",{class:"row",style:"margin:8px 0 0;gap:8px"},el("input",{type:"checkbox",checked:R.keepLib,onchange:e=>{R.keepLib=e.target.checked;schedule();}}),"Keep my current Hitter and Facility Libraries (don't restore them from the file)"),
+      el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:R.busy,onclick:go},R.busy?"Restoring…":"Restore this event"),el("button",{class:"ghost",disabled:R.busy,onclick:()=>{S.restore=null;schedule();}},"Cancel"))):null,
+    R.err?el("div",{class:"note bad",text:R.err}):null,R.done?el("div",{class:"note",text:R.done}):null);}
 
 /* ---------- import from the earlier version ---------- */
 function importCard(){const st=S.imp=S.imp||{busy:false,err:"",done:""};
