@@ -281,6 +281,7 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .pastbtn{margin-left:auto}
 .pastrow{width:100%;text-align:left;display:flex;align-items:center;gap:10px;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 4px}
 .pastbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.evrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.evrow.live{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .pastbar.editing{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
 </style>
 
@@ -317,7 +318,7 @@ Object.defineProperty(S,"event",{configurable:true,get(){const a=pastArc();retur
 Object.defineProperty(S,"admin",{configurable:true,get(){const a=pastArc();return a?pastAdmin(a):S._admin;},
   set(v){const a=pastArc();if(a)S.archive[S.past]=Object.assign({},a,{admin:{rr:v.rr||{},mpWinner:v.mpWinner||{},mpVal:v.mpVal||{},undo:(v.undo||[]).slice(-50)}});else S._admin=v;}});
 const leavePast=()=>{S.past=null;S.pastEdit=false;S.pastConfirm=null;};
-function goView(v){if(v!=="tracker")leavePast();S.view=v;S.confirm=null;S.modal=null;S.sub=null;S.warn=null;S.mpEdit=null;try{if(location.hash!=="#"+v)history.replaceState?history.replaceState(null,"","#"+v):location.hash=v;}catch(e){}schedule();scrollTo(0,0);}
+function goView(v){leavePast();S.print=false;S.view=v;S.confirm=null;S.modal=null;S.sub=null;S.warn=null;S.mpEdit=null;try{if(location.hash!=="#"+v)history.replaceState?history.replaceState(null,"","#"+v):location.hash=v;}catch(e){}schedule();scrollTo(0,0);}
 
 /* ---------- helpers ---------- */
 const clone=o=>o==null?o:JSON.parse(JSON.stringify(o));
@@ -593,7 +594,9 @@ function render(){const app=document.getElementById("app");const a=document.acti
     app.replaceChildren(!S.authReady?el("div",{class:"panel"},el("p",{class:"muted",style:"margin:0"},"Loading…"))
       :S.needName||(S.role&&S.role!=="spectator")?signInBox():S.role==="spectator"?codeBox():welcomeBox());
     if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement)n.focus({preventScroll:true});}return;}
-  if(S.past&&(view()!=="tracker"||!pastArc()))leavePast();
+  // A past event stays open only while browsing it on the Tracker, editing it in
+  // Director → Events, or printing it.
+  if(S.past&&(!pastArc()||!(view()==="tracker"||(view()==="director"&&(S.pastEdit||S.print)))))leavePast();
   if(EV())computeAll();
   document.body.classList.toggle("printing",!!S.print&&S.me.isOwner);
   if(S.print&&S.me.isOwner){app.replaceChildren(...printView());return;}
@@ -879,14 +882,15 @@ function matchSetsBox(h){const ev=EV(),hid=h.id,rd=rrDone(h.id),V=S.vault[S.me.i
 
 /* ---------- DIRECTOR ---------- */
 function vDirector(){if(!S.noDb&&!S.me.isOwner)return [el("div",{class:"panel"},"Only the event owner can use the director tools.")];
+  if(S.past&&S.pastEdit&&pastArc())return pastEditor(S.past,pastArc());
   const out=[];
   if(S.noDb){out.push(el("div",{class:"note warn"},"Preview only. Director tools save to the live event on the published page. The field-size tester below works here."));out.push(testerSection());return out;}
   if(!S.loaded){out.push(el("div",{class:"panel"},"Loading event data…"));return out;}
   if(!EV()){out.push(el("section",{class:"panel sec"},el("h2",{text:"Create the event"}),el("p",{class:"muted",style:"margin:0"},"Starts with your usual format: 3 sets × 6 balls, then Champions (10), Competitors (8) and Contender (everyone left), each with play-ins. You can change all of it."),
     el("div",{class:"row"},el("button",{class:"primary",onclick:()=>saveEvent(()=>{},"Created the event")},"Create event"))));out.push(importCard());out.push(testerSection());return out;}
   const ev=EV(),live=(ev.phase==="match"||ev.phase==="final")&&!!ev.seeding;
-  const subs=[["settings","Details"],["hitters","Hitters"],["flow","Event Flow"],["seeds","Seeds"]],tops=[["event","Event Details"],["log","Log"],["library","Hitter Library"],["facilities","Facility Library"],["backup","Backup & Print"]];
-  const t=[...subs,["log"],["library"],["facilities"],["backup"]].some(x=>x[0]===S.dtab)?S.dtab:ev.phase==="setup"?"settings":"flow",inEv=subs.some(x=>x[0]===t);
+  const subs=[["settings","Details"],["hitters","Hitters"],["flow","Event Flow"],["seeds","Seeds"]],tops=[["event","Event Details"],["events","Events"],["log","Log"],["library","Hitter Library"],["facilities","Facility Library"],["backup","Backup & Print"]];
+  const t=[...subs,["events"],["log"],["library"],["facilities"],["backup"]].some(x=>x[0]===S.dtab)?S.dtab:ev.phase==="setup"?"settings":"flow",inEv=subs.some(x=>x[0]===t);
   if(inEv)S.lastSub=t;
   const go=k=>{S.dtab=k==="event"?(S.lastSub||(ev.phase==="setup"?"settings":"flow")):k;S.confirm=null;schedule();};
   out.push(el("div",{class:"subnav",role:"tablist","aria-label":"Director sections"},tops.map(([k,l])=>el("button",{role:"tab","aria-selected":(k==="event"?inEv:t===k)?"true":"false",onclick:()=>go(k)},l))));
@@ -899,6 +903,7 @@ function vDirector(){if(!S.noDb&&!S.me.isOwner)return [el("div",{class:"panel"},
   if(t==="library")out.push(...librarySection());
   if(t==="facilities")out.push(...facilitySection());
   if(t==="backup")out.push(...backupSection());
+  if(t==="events")out.push(...eventsSection());
   if(S.modal&&S.modal.startsWith("perm:"))out.push(permModal(S.modal.slice(5)));
   else if(S.modal&&S.modal.startsWith("arch:")&&libH(S.modal.slice(5)))out.push(archiveModal(S.modal.slice(5)));
   else if(S.modal&&S.modal.startsWith("del:")&&hitter(S.modal.slice(4))&&!rosterLocked())out.push(deleteModal(S.modal.slice(4)));
@@ -1383,8 +1388,8 @@ async function downloadBackup(){try{const j=await LIF.backup();download(`HitTheG
 function backupSection(){const ev=EV(),hasMp=!!(S.brackets&&S.brackets.length);
   return[el("section",{class:"panel sec"},el("h2",{text:"Backup"}),
       el("p",{class:"muted",style:"margin:0"},"Downloads everything: this event, the Hitter and Facility Libraries, logins and scores. Keep a copy before and after each event. It can be loaded back in if anything ever goes wrong."),
-      el("div",{class:"row"},el("button",{class:"primary",onclick:downloadBackup},"Download backup"))),
-    restoreCard(),
+      el("div",{class:"row"},el("button",{class:"primary",onclick:downloadBackup},"Download backup")),
+      el("p",{class:"muted small",style:"margin:0"},"To load a backup file back in, use Events → Restore from a file.")),
     el("section",{class:"panel sec"},el("h2",{text:"Results export"}),
       el("p",{class:"muted",style:"margin:0"},"Spreadsheet files (CSV) that open in Excel, Numbers or Google Sheets."),
       el("div",{class:"row",style:"flex-wrap:wrap"},
@@ -1395,7 +1400,7 @@ function backupSection(){const ev=EV(),hasMp=!!(S.brackets&&S.brackets.length);
       el("div",{class:"row"},el("button",{class:"primary",onclick:()=>{S.print=true;schedule();window.scrollTo(0,0);}},"Open printable sheets")))];}
 
 function printView(){const ev=EV(),n=ev.rrSets,out=[];
-  out.push(el("div",{class:"printbar noprint"},el("button",{class:"primary",onclick:()=>window.print()},"Print"),el("button",{onclick:()=>{S.print=false;schedule();}},"Close"),
+  out.push(el("div",{class:"printbar noprint"},el("button",{class:"primary",onclick:()=>window.print()},"Print"),el("button",{onclick:()=>{S.print=false;if(S.pastPrint){leavePast();S.pastPrint=false;}schedule();}},"Close"),
     el("span",{class:"muted",text:"Tip: choose Portrait for the roster and Landscape if brackets look cramped."})));
   const head=(t)=>el("div",{class:"phead"},el("div",{},el("strong",{text:ev.name||"Event"}),el("span",{text:[ev.date||"",ev.code?"Code "+ev.code:""].filter(Boolean).join(" · ")})),el("h2",{text:t}));
   // Roster and round robin
@@ -1470,19 +1475,42 @@ function pastList(){const list=pastEvents();
         el("span",{class:"grow"},el("strong",{text:ev.name||"Event"}),el("span",{class:"muted small",text:` · ${dateText(ev.date)} · ${n} hitter${n===1?"":"s"}`}),
           w.length?el("div",{class:"small",style:"margin-top:4px"},...w.map(([d,nm])=>el("span",{class:"chip on",style:"margin-right:6px",text:`${d}: ${nm}`}))):el("div",{class:"muted small",text:ev.seeding?"":"Round robin only"})),
         el("span",{class:"muted",text:"View →"}));}):el("div",{class:"muted li",text:"Finished events will be listed here."}))];}
-function pastView(id,a){const ev=a.event,isDir=S.me.isOwner,edit=isDir&&S.pastEdit;const st=S.pastConfirm===id;
-  const bar=el("div",{class:"note pastbar"+(edit?" editing":"")},el("span",{class:"grow"},el("strong",{text:"Past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. `,
-      edit?el("strong",{text:"Editing: changes save to this past event only."}):"Read-only."),
-    isDir?el("button",{class:edit?"primary":"",onclick:()=>{S.pastEdit=!S.pastEdit;schedule();}},edit?"Done editing":"Edit"):null,
+function pastView(id,a){const ev=a.event;
+  const bar=el("div",{class:"note pastbar"},el("span",{class:"grow"},el("strong",{text:"Past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. Read-only.`),
     el("button",{class:"ghost",onclick:()=>{leavePast();S.pastOpen=true;schedule();}},"← All past events"),
     el("button",{class:"ghost",onclick:()=>{leavePast();S.pastOpen=false;schedule();}},"Current event"),
-    isDir&&!st&&!edit?el("button",{onclick:()=>{S.pastConfirm=id;schedule();}},"Make this the current event"):null);
-  const out=[bar];
-  if(isDir&&st)out.push(el("div",{class:"note warn"},`Make “${ev.name}” the current event again? Everyone will see it live instead of “${S._event?.name||"the current event"}”, which is saved to Past events first. Nothing is deleted.`,
-    el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:S.pastBusy,onclick:()=>makeCurrent(id,a)},S.pastBusy?"Switching…":"Yes, make it current"),el("button",{class:"ghost",onclick:()=>{S.pastConfirm=null;schedule();}},"Cancel"))));
-  if(edit)out.push(el("div",{class:"row",style:"margin:-4px 0 10px"},undoBtn(),el("span",{class:"muted small",text:"Use the ✎ on a round robin row, or tap a name in a bracket, to correct a number. Each change is logged."})));
-  out.push(...withPast(id,()=>[].concat(vTrackerLive()).filter(Boolean),edit));
-  return out;}
+    S.me.isOwner?el("button",{class:"ghost",onclick:()=>{S.dtab="events";goView("director");}},"Manage in Director → Events"):null);
+  return[bar,...withPast(id,()=>[].concat(vTrackerLive()).filter(Boolean),false)];}
+
+/* ---------- Director → Events ---------- */
+function eventsSection(){const live=S._event,list=pastEvents();
+  const winners=w=>w.length?el("div",{class:"small",style:"margin-top:4px"},...w.map(([d,nm])=>el("span",{class:"chip on",style:"margin-right:6px",text:`${d}: ${nm}`}))):null;
+  const liveW=live&&live.seeding?(S.brackets||[]).filter(b=>b.champ&&b.champ!=="BYE").map(b=>[b.div.name,nameOf(b.champ)]):[];
+  const row=(ev,isLive,id,a,w)=>{const n=(ev.hitters||[]).filter(h=>h.status!=="withdrawn").length,ask=S.pastConfirm===id&&id;
+    return el("div",{class:"li evrow"+(isLive?" live":"")},
+      el("div",{class:"grow"},isLive?el("span",{class:"chip on",style:"margin-right:8px",text:"Live"}):null,el("strong",{text:ev.name||"Event"}),
+        el("span",{class:"muted small",text:` · ${dateText(ev.date)} · ${n} hitter${n===1?"":"s"} · ${phaseName(ev.phase)}${!isLive&&a.editedAt?" · edited "+tstr(a.editedAt):""}`}),winners(w)),
+      el("div",{class:"row",style:"margin:0;flex-wrap:wrap"},
+        el("button",{class:"primary",onclick:()=>{if(isLive){goView("tracker");}else{S.past=id;S.pastEdit=true;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}}},"Edit"),
+        !isLive?el("button",{onclick:()=>{S.pastConfirm=id;schedule();}},"Make current"):null,
+        el("button",{onclick:()=>eventResults(id,"rr")},"Round robin CSV"),
+        ev.seeding?el("button",{onclick:()=>eventResults(id,"mp")},"Match play CSV"):null,
+        el("button",{onclick:()=>{if(id){S.past=id;S.pastPrint=true;}S.print=true;schedule();window.scrollTo(0,0);}},"Print")),
+      ask?el("div",{class:"note warn",style:"flex-basis:100%"},`Make “${ev.name}” the current event? Everyone will see it live instead of “${live?.name||"the current event"}”, which is saved to this list first. Nothing is deleted.`,
+        el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:S.pastBusy,onclick:()=>makeCurrent(id,a)},S.pastBusy?"Switching…":"Yes, make it current"),el("button",{class:"ghost",onclick:()=>{S.pastConfirm=null;schedule();}},"Cancel"))):null);};
+  return[el("section",{class:"panel sec"},el("div",{class:"sechead"},el("h2",{text:"Events"}),el("span",{class:"muted small",text:"Every event, live and past. Edit, switch, export or print any of them."})),
+      el("div",{class:"list"},live?row(live,true,null,null,liveW):null,...list.map(([id,a])=>row(a.event,false,id,a,pastWinners(id))),
+        !list.length?el("div",{class:"muted li",text:"Past events appear here after you start a new event."}):null)),
+    restoreCard()];}
+// Results spreadsheets for any event (live when id is null).
+function eventResults(id,kind){const go=()=>{const name=fileBase()+(kind==="rr"?"-round-robin.csv":"-match-play.csv");download(name,csv(kind==="rr"?rrRows():mpRows()),"text/csv");};
+  if(!id)return go();withPast(id,go,false);}
+// Editing a past event, inside Director → Events.
+function pastEditor(id,a){const ev=a.event;
+  const bar=el("div",{class:"note pastbar editing"},el("span",{class:"grow"},el("strong",{text:"Editing past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. Changes save to this event only. The live event isn't affected.`),
+    el("button",{class:"primary",onclick:()=>{leavePast();S.dtab="events";schedule();window.scrollTo(0,0);}},"Done"));
+  return[bar,el("div",{class:"row",style:"margin:-4px 0 10px"},undoBtn(),el("span",{class:"muted small",text:"Use the ✎ on a round robin row, or tap a name in a bracket, to correct a number. Each change is logged."})),
+    ...withPast(id,()=>[].concat(vTrackerLive()).filter(Boolean),true)];}
 async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule();
   try{const cur=S._event;
     if(cur)await write("archive/"+(cur.eid||"e0")+"-"+Date.now().toString(36),{event:clone(cur),admin:{rr:S._admin?.rr||{},mpWinner:S._admin?.mpWinner||{},mpVal:S._admin?.mpVal||{}},archivedAt:Date.now()});

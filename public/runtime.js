@@ -106,6 +106,12 @@
           headers: { "Content-Type": "application/json", "X-Held": e.fails ? "1" : "0", "X-Client-Now": String(Date.now()) } });
         outbox.shift(); saveOutbox(); settle(e.id, null, { sent: true });
         setStatus({ online: true });
+        // Once nothing more is waiting for this document, take the server's copy
+        // (it carries the arrival stamps), and check again shortly to be sure.
+        if (!outbox.some((x) => x.path === e.path)) {
+          if (deferred.has(e.path)) { const d = deferred.get(e.path); deferred.delete(e.path); apply([{ p: e.path, d }]); }
+          clearTimeout(polling); polling = setTimeout(poll, 600);
+        }
       } catch (err) {
         if (retryable(err)) {
           // Keep it on the phone; the app treats it as saved and it goes out later.
@@ -128,10 +134,11 @@
   function resync(path) { since = 0; store.delete(path); notify([path]); poll(); }
 
   /* ---------- applying changes from the server ---------- */
+  const deferred = new Map();       // server copies that arrived while our own save was pending
   function apply(docs, now) {
     const skip = pendingPaths(), changed = [];
     for (const { p, d } of docs) {
-      if (skip.has(p)) continue;                 // our unsent save wins until it's sent
+      if (skip.has(p)) { deferred.set(p, d); continue; }   // our unsent save wins until it's sent
       if (JSON.stringify(store.get(p)) === JSON.stringify(d)) continue;
       if (d == null) store.delete(p); else store.set(p, d);
       changed.push(p);
