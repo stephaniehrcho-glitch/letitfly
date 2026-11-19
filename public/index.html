@@ -281,6 +281,7 @@ nav.tabs a.acct{font-size:12px;opacity:.6}
 .pastbtn{margin-left:auto}
 .pastrow{width:100%;text-align:left;display:flex;align-items:center;gap:10px;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 4px}
 .pastbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pastbar.editing{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
 </style>
 
 <header class="band"><div class="wrap">
@@ -305,7 +306,18 @@ const D={}; // input drafts
 const vcache={};
 const VIEWS=["tracker","enter","director"];
 const view=()=>{if(S.view&&VIEWS.includes(S.view))return S.view;const h=(location.hash||"").slice(1);return VIEWS.includes(h)?h:"tracker"};
-function goView(v){S.view=v;S.confirm=null;S.modal=null;S.sub=null;S.warn=null;S.mpEdit=null;try{if(location.hash!=="#"+v)history.replaceState?history.replaceState(null,"","#"+v):location.hash=v;}catch(e){}schedule();scrollTo(0,0);}
+// While a past event is open (Tracker only), S.event and S.admin read from it,
+// so every Tracker tool, warning and undo works on that event. The live copies
+// live in S._event / S._admin and are what the live data feeds update.
+S._event=S.event;S._admin=S.admin;
+const pastArc=()=>S.past&&S.archive?S.archive[S.past]||null:null;
+const pastAdmin=a=>({rr:a.admin?.rr||{},mpWinner:a.admin?.mpWinner||{},mpVal:a.admin?.mpVal||{},undo:a.admin?.undo||[],log:S._admin?.log||[]});
+Object.defineProperty(S,"event",{configurable:true,get(){const a=pastArc();return a?a.event:S._event;},
+  set(v){const a=pastArc();if(a)S.archive[S.past]=Object.assign({},a,{event:v});else S._event=v;}});
+Object.defineProperty(S,"admin",{configurable:true,get(){const a=pastArc();return a?pastAdmin(a):S._admin;},
+  set(v){const a=pastArc();if(a)S.archive[S.past]=Object.assign({},a,{admin:{rr:v.rr||{},mpWinner:v.mpWinner||{},mpVal:v.mpVal||{},undo:(v.undo||[]).slice(-50)}});else S._admin=v;}});
+const leavePast=()=>{S.past=null;S.pastEdit=false;S.pastConfirm=null;};
+function goView(v){if(v!=="tracker")leavePast();S.view=v;S.confirm=null;S.modal=null;S.sub=null;S.warn=null;S.mpEdit=null;try{if(location.hash!=="#"+v)history.replaceState?history.replaceState(null,"","#"+v):location.hash=v;}catch(e){}schedule();scrollTo(0,0);}
 
 /* ---------- helpers ---------- */
 const clone=o=>o==null?o:JSON.parse(JSON.stringify(o));
@@ -468,7 +480,7 @@ function computeAll(){S.brackets=[];S.keyIndex={};S.aheadUse=[];const sd=EV()?.s
     for(const r of Object.values(res))if(r.key)S.keyIndex[r.key]={res:r,div};}}
 
 /* ---------- auto reveal ---------- */
-function reconcile(){if(!S.db||(!S.me.id&&!S.me.isOwner)||S.revealing||S.canWrite===false)return;
+function reconcile(){if(S.past||!S.db||(!S.me.id&&!S.me.isOwner)||S.revealing||S.canWrite===false)return;
   const docs={},get=u=>docs[u]=docs[u]||(clone(S.reveals[u])||{}),can=u=>u===S.me.id||S.me.isOwner;
   const ready=(r,hid)=>{const opp=r.a===hid?r.b:r.a;if(opp===undefined)return false;return isOut(opp)||!!(r.a===hid?r.eb:r.ea)?.committed||r.winner!==undefined;};
   for(const [u,vd] of Object.entries(S.vault)){if(!can(u)||!vd)continue;const com=S.commits[u]||{},rev=S.reveals[u]||{};
@@ -482,9 +494,22 @@ function reconcile(){if(!S.db||(!S.me.id&&!S.me.isOwner)||S.revealing||S.canWrit
   Promise.all(us.map(u=>write("reveals/"+u,docs[u]).then(()=>{S.reveals[u]=docs[u]}))).catch(()=>{}).finally(()=>{S.revealing=false;schedule()});}
 
 /* ---------- director writes ---------- */
-async function saveEvent(mut,log){const ev=clone(EV())||defaultEvent();mut(ev);S.event=ev;schedule();
+async function saveEvent(mut,log){
+  if(pastArc()){if(!S.pastEdit)return toast("Past events are read-only. Turn on Edit first.");
+    const id=S.past,ev=clone(EV());mut(ev);S.event=ev;schedule();
+    try{await write("archive/"+id,Object.assign(clone(S.archive[id]),{editedAt:Date.now()}));if(log)await saveAdmin(()=>{},log);}catch(e){toast("Couldn't save: "+(e?.message||"error"));}
+    return;}
+  const ev=clone(EV())||defaultEvent();mut(ev);S.event=ev;schedule();
   try{await write("event/main",ev);if(log)await addLog(log);}catch(e){toast("Couldn't save: "+(e?.message||e?.code||"error"));}}
-async function saveAdmin(mut,log){const a=clone(S.admin)||{};a.rr=a.rr||{};a.mpVal=a.mpVal||{};a.mpWinner=a.mpWinner||{};a.log=a.log||[];mut(a);
+async function saveAdmin(mut,log){
+  if(pastArc()){if(!S.pastEdit)return toast("Past events are read-only. Turn on Edit first.");
+    const id=S.past,ev=EV();const a=clone(S.admin)||{};a.rr=a.rr||{};a.mpVal=a.mpVal||{};a.mpWinner=a.mpWinner||{};mut(a);
+    S.admin=a;schedule();const arc=clone(S.archive[id]);
+    try{await write("archive/"+id,Object.assign(arc,{editedAt:Date.now()}));
+      if(log){const L=clone(S._admin)||{};L.log=[{at:Date.now(),t:`Past event “${ev.name}” (${ev.date||"no date"}): ${log}`,ev:S._event?.eid||""}].concat(L.log||[]).slice(0,300);S._admin=L;await write("admin/state",L);}}
+    catch(e){toast("Couldn't save: "+(e?.message||"error"));}
+    return;}
+  const a=clone(S.admin)||{};a.rr=a.rr||{};a.mpVal=a.mpVal||{};a.mpWinner=a.mpWinner||{};a.log=a.log||[];mut(a);
   if(log){a.log.unshift({at:Date.now(),t:log,ev:EV()?.eid||""});a.log=a.log.slice(0,300);}S.admin=a;schedule();
   try{await write("admin/state",a);}catch(e){toast("Couldn't save: "+(e?.message||e?.code||"error"));}}
 const addLog=t=>saveAdmin(()=>{},t);
@@ -568,6 +593,7 @@ function render(){const app=document.getElementById("app");const a=document.acti
     app.replaceChildren(!S.authReady?el("div",{class:"panel"},el("p",{class:"muted",style:"margin:0"},"Loading…"))
       :S.needName||(S.role&&S.role!=="spectator")?signInBox():S.role==="spectator"?codeBox():welcomeBox());
     if(fid){const n=document.getElementById(fid);if(n&&n!==document.activeElement)n.focus({preventScroll:true});}return;}
+  if(S.past&&(view()!=="tracker"||!pastArc()))leavePast();
   if(EV())computeAll();
   document.body.classList.toggle("printing",!!S.print&&S.me.isOwner);
   if(S.print&&S.me.isOwner){app.replaceChildren(...printView());return;}
@@ -579,9 +605,9 @@ function render(){const app=document.getElementById("app");const a=document.acti
   if(S.focusId){const n=document.getElementById(S.focusId);if(n){n.focus();S.focusId=null;}}
   if(S.focusMatch&&view()==="director"){const n=document.getElementById("mc_"+S.focusMatch);if(n&&n.scrollIntoView&&!S.focusDone){S.focusDone=true;requestAnimationFrame(()=>n.scrollIntoView({block:"center",behavior:"smooth"}));
     setTimeout(()=>{S.focusMatch=null;S.focusDone=false;schedule();},4000);}}
-  if(S.me.isOwner){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
+  if(S.me.isOwner&&!S.past){autoLink();if(S.me.id&&EV()&&EV().ownerId!==S.me.id&&!S.settingOwner){S.settingOwner=true;saveEvent(e=>e.ownerId=S.me.id).finally(()=>{S.settingOwner=false;});}}
   reconcile();refreshProfiles();requestAnimationFrame(drawBracketLines);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawBracketLines);}
-function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:(S.past&&S.archive?.[S.past]?.event)||EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
+function renderHeader(){const signedIn=!!S.me.id&&!S.needName;const gated=!signedIn&&!S.spectate;const ev=gated?null:EV();document.getElementById("hdrName").textContent=ev?.name||"Hit The Grid";
   document.getElementById("hdrSub").textContent=ev?[ev.date?new Date(ev.date+"T12:00").toLocaleDateString([], {month:"short",day:"numeric",year:"numeric"}):"",phaseName(ev.phase)].filter(Boolean).join(" · "):"Long drive · Live scoring";
   if(gated){document.getElementById("tabs").replaceChildren();return;}
   if(!signedIn){document.getElementById("tabs").replaceChildren(
@@ -595,7 +621,7 @@ const phaseName=p=>({setup:"Setup",rr:"Round robin",match:"Match play",final:"Co
 let lastIds="";function refreshProfiles(){if(!S.user)return;const ids=[...new Set([...Object.keys(S.joins),...Object.keys(EV()?.assign||{}),...Object.keys(S.rr),...Object.keys(S.commits),S.me.id].filter(Boolean))];
   const k=ids.sort().join(",");if(k===lastIds||!ids.length)return;lastIds=k;
   S.user.profiles(ids).then(ps=>{S.profiles=Object.assign({},S.profiles,ps);schedule();}).catch(()=>{});}
-let linking=false;function autoLink(){if(linking||!S.lib||!EV())return;migrateLib();migrateFac();const byEmail={};for(const h of EV().hitters){const e=emailOf(h.id);if(e)byEmail[e.toLowerCase()]=h.id;}
+let linking=false;function autoLink(){if(S.past||linking||!S.lib||!EV())return;migrateLib();migrateFac();const byEmail={};for(const h of EV().hitters){const e=emailOf(h.id);if(e)byEmail[e.toLowerCase()]=h.id;}
   const add=[];for(const u of Object.keys(S.joins)){const em=S.profiles[u]?.email;if(!em)continue;const h=byEmail[em.toLowerCase()];
     if(h&&hitter(h)&&!((EV().assign||{})[u]||[]).includes(h)&&!(S.autoDone||(S.autoDone=new Set())).has(u+h))add.push([u,h]);}
   if(!add.length)return;linking=true;add.forEach(([u,h])=>S.autoDone.add(u+h));
@@ -701,7 +727,7 @@ function matchCard(r,seedOf,ph){if(!r)return el("div",{class:"match"});
     return el("div",{class:cls},(sd=>el("span",{class:sd?"seed":"seed none",text:sd}))(seedOf(hid)),ph?el("span",{class:"nm muted",text:ph(hid)}):el("span",{class:"nm"+(S.me.isOwner&&!ph&&hid!=="BYE"?" nmlink":""),onclick:S.me.isOwner&&hitter(hid)?()=>{S.modal="enter:"+hid;S.confirm=null;schedule();}:null},fl(hid),nameOf(hid),r.att>0?el("span",{class:"chip mark tiny",title:r.att>1?`Tied ${r.att} times, rehit`:"Tied, rehit",text:r.att>1?`Tie – rehit ×${r.att}`:"Tie – rehit"}):null),el("span",{class:"yd"+(val==="locked"?" muted small":""),text:val},
       S.me.isOwner&&e&&r.key?flagBang([e.off?lateReason(pname(e.uid),e):null,...asideFor(r.key,hid,e.uid).map(x=>`Set aside: ${pname(x.u)} also locked in ${x.v!=null?fmt(x.v):"a number"}, but ${pname(e.uid)}'s entry reached the server first${x.c.off?` (the set-aside one was ${heldText(x.c)})`:""}. Review it in Match control.`)]):null));};
   let st=null;
-  const rb=S.me.isOwner&&r.pk?el("button",{class:"primary stbtn",onclick:()=>{S.dtab="flow";S.focusMatch=r.pk;S.focusDone=false;goView("director");}},"Resolve →"):null;
+  const rb=S.me.isOwner&&r.pk&&!S.past?el("button",{class:"primary stbtn",onclick:()=>{S.dtab="flow";S.focusMatch=r.pk;S.focusDone=false;goView("director");}},"Resolve →"):null;
   if(r.status==="tie")st=el("div",{class:"st mark"},el("span",{text:"Tie · rehit needed"}),rb);
   else if(r.status==="td")st=el("div",{class:"st",text:"Result set by the director"});
   else if(r.status==="forfeit")st=el("div",{class:"st",text:"Advanced by withdrawal"});
@@ -1310,7 +1336,7 @@ function codeBox(){const C=S.codeEntry=S.codeEntry||{code:"",err:S.codeErr||"",b
 function codePrefix(d){const x=new Date((d||new Date().toISOString().slice(0,10))+"T12:00");return x.toLocaleString("en-US",{month:"short"})+x.getDate()+"-"+x.getFullYear();}
 function makeCode(ev){const pre=codePrefix(ev.date);const used=(S.lib?.usedCodes||[]).filter(c=>c!==ev.code);let n=1;while(used.includes(pre+"-"+n))n++;return pre+"-"+n;}
 // Director only: give the event a code, and keep it in step with the date until round robin starts.
-function ensureCode(){const ev=EV();if(!S.me.isOwner||!ev||!S.libLoaded||!S.lib||S.codeBusy)return;
+function ensureCode(){if(S.past)return;const ev=EV();if(!S.me.isOwner||!ev||!S.libLoaded||!S.lib||S.codeBusy)return;
   const stale=!ev.code||!/^[A-Z][a-z]{2}\d{1,2}-\d{4}-\d+$/.test(ev.code)||(ev.phase==="setup"&&!ev.code.startsWith(codePrefix(ev.date)+"-"));if(!stale)return;
   const code=makeCode(ev),old=ev.code;S.codeBusy=true;
   Promise.all([saveEvent(e=>{e.code=code;}),saveLib(l=>{l.usedCodes=(l.usedCodes||[]).filter(c=>c!==old).concat(code);})]).finally(()=>{S.codeBusy=false;});}
@@ -1427,40 +1453,43 @@ function restoreCard(){const R=S.restore=S.restore||{file:null,data:null,keepLib
 /* ---------- past events ---------- */
 // Archived events, newest first. Empty ones (no hitters) only show to the director,
 // and a copy of the event that's live right now isn't listed twice.
-function pastEvents(){const cur=EV(),sig=e=>[(e?.eid||""),e?.name||"",e?.date||""].join("|");
+function pastEvents(){const cur=S._event,sig=e=>[(e?.eid||""),e?.name||"",e?.date||""].join("|");
   return Object.entries(S.archive||{}).filter(([id,a])=>a&&a.event&&(S.me.isOwner||(a.event.hitters||[]).length)&&!(cur&&sig(a.event)===sig(cur)))
     .sort((x,y)=>(y[1].event.date||"").localeCompare(x[1].event.date||"")||(y[1].archivedAt||0)-(x[1].archivedAt||0));}
-// Shows an archived event with the normal Tracker logic, read-only.
-function withPast(a,fn){const keep={event:S.event,admin:S.admin,brackets:S.brackets,keyIndex:S.keyIndex,aheadUse:S.aheadUse,me:S.me};
-  S.event=a.event;S.admin=Object.assign({},keep.admin||{},{rr:a.admin?.rr||{},mpWinner:a.admin?.mpWinner||{},mpVal:a.admin?.mpVal||{}});
-  S.me=Object.assign({},keep.me,{isOwner:false});
-  try{computeAll();return fn();}finally{Object.assign(S,keep);}}
-function pastWinners(a){try{return withPast(a,()=>(S.brackets||[]).filter(b=>b.champ&&b.champ!=="BYE").map(b=>[b.div.name,nameOf(b.champ)]));}catch(e){return[];}}
+// Shows an archived event with the normal Tracker logic. Read-only unless the
+// director has turned on Edit for it.
+function withPast(id,fn,edit){const keep={past:S.past,me:S.me,brackets:S.brackets,keyIndex:S.keyIndex,aheadUse:S.aheadUse};
+  S.past=id;if(!edit)S.me=Object.assign({},keep.me,{isOwner:false});
+  try{computeAll();return fn();}finally{S.past=keep.past;S.me=keep.me;if(keep.past!==id||!edit){S.brackets=keep.brackets;S.keyIndex=keep.keyIndex;S.aheadUse=keep.aheadUse;}}}
+function pastWinners(id){try{return withPast(id,()=>(S.brackets||[]).filter(b=>b.champ&&b.champ!=="BYE").map(b=>[b.div.name,nameOf(b.champ)]));}catch(e){return[];}}
 const dateText=d=>d?new Date(d+"T12:00").toLocaleDateString([], {weekday:"short",month:"short",day:"numeric",year:"numeric"}):"";
 function pastList(){const list=pastEvents();
   return[el("div",{class:"sechead"},el("h2",{text:"Past events"}),el("button",{class:"ghost",onclick:()=>{S.pastOpen=false;schedule();}},"← Current event")),
-    el("div",{class:"list"},list.length?list.map(([id,a])=>{const ev=a.event,w=pastWinners(a),n=(ev.hitters||[]).filter(h=>h.status!=="withdrawn").length;
+    el("div",{class:"list"},list.length?list.map(([id,a])=>{const ev=a.event,w=pastWinners(id),n=(ev.hitters||[]).filter(h=>h.status!=="withdrawn").length;
       return el("button",{class:"li pastrow",onclick:()=>{S.past=id;S.pastOpen=false;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}},
         el("span",{class:"grow"},el("strong",{text:ev.name||"Event"}),el("span",{class:"muted small",text:` · ${dateText(ev.date)} · ${n} hitter${n===1?"":"s"}`}),
           w.length?el("div",{class:"small",style:"margin-top:4px"},...w.map(([d,nm])=>el("span",{class:"chip on",style:"margin-right:6px",text:`${d}: ${nm}`}))):el("div",{class:"muted small",text:ev.seeding?"":"Round robin only"})),
         el("span",{class:"muted",text:"View →"}));}):el("div",{class:"muted li",text:"Finished events will be listed here."}))];}
-function pastView(id,a){const ev=a.event,isDir=S.me.isOwner;const st=S.pastConfirm===id;
-  const bar=el("div",{class:"note pastbar"},el("span",{class:"grow"},el("strong",{text:"Past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. Read-only.`),
-    el("button",{class:"ghost",onclick:()=>{S.past=null;S.pastOpen=true;S.pastConfirm=null;schedule();}},"← All past events"),
-    el("button",{class:"ghost",onclick:()=>{S.past=null;S.pastOpen=false;S.pastConfirm=null;schedule();}},"Current event"),
-    isDir&&!st?el("button",{onclick:()=>{S.pastConfirm=id;schedule();}},"Make this the current event"):null);
+function pastView(id,a){const ev=a.event,isDir=S.me.isOwner,edit=isDir&&S.pastEdit;const st=S.pastConfirm===id;
+  const bar=el("div",{class:"note pastbar"+(edit?" editing":"")},el("span",{class:"grow"},el("strong",{text:"Past event: "}),`${ev.name||"Event"} · ${dateText(ev.date)}. `,
+      edit?el("strong",{text:"Editing: changes save to this past event only."}):"Read-only."),
+    isDir?el("button",{class:edit?"primary":"",onclick:()=>{S.pastEdit=!S.pastEdit;schedule();}},edit?"Done editing":"Edit"):null,
+    el("button",{class:"ghost",onclick:()=>{leavePast();S.pastOpen=true;schedule();}},"← All past events"),
+    el("button",{class:"ghost",onclick:()=>{leavePast();S.pastOpen=false;schedule();}},"Current event"),
+    isDir&&!st&&!edit?el("button",{onclick:()=>{S.pastConfirm=id;schedule();}},"Make this the current event"):null);
   const out=[bar];
-  if(isDir&&st)out.push(el("div",{class:"note warn"},`Make “${ev.name}” the current event again? Everyone will see it live instead of “${EV()?.name||"the current event"}”, which is saved to Past events first. Nothing is deleted.`,
+  if(isDir&&st)out.push(el("div",{class:"note warn"},`Make “${ev.name}” the current event again? Everyone will see it live instead of “${S._event?.name||"the current event"}”, which is saved to Past events first. Nothing is deleted.`,
     el("div",{class:"row",style:"margin-top:8px"},el("button",{class:"primary",disabled:S.pastBusy,onclick:()=>makeCurrent(id,a)},S.pastBusy?"Switching…":"Yes, make it current"),el("button",{class:"ghost",onclick:()=>{S.pastConfirm=null;schedule();}},"Cancel"))));
-  out.push(...withPast(a,()=>[].concat(vTrackerLive()).filter(x=>x&&!(x.classList&&x.querySelector&&x.querySelector(".pastbtn")&&x.children.length===1))));
+  if(edit)out.push(el("div",{class:"row",style:"margin:-4px 0 10px"},undoBtn(),el("span",{class:"muted small",text:"Use the ✎ on a round robin row, or tap a name in a bracket, to correct a number. Each change is logged."})));
+  out.push(...withPast(id,()=>[].concat(vTrackerLive()).filter(Boolean),edit));
   return out;}
 async function makeCurrent(id,a){if(S.pastBusy)return;S.pastBusy=true;schedule();
-  try{const cur=EV();
-    if(cur)await write("archive/"+(cur.eid||"e0")+"-"+Date.now().toString(36),{event:clone(cur),admin:{rr:S.admin?.rr||{},mpWinner:S.admin?.mpWinner||{},mpVal:S.admin?.mpVal||{}},archivedAt:Date.now()});
-    const ad=Object.assign(clone(S.admin||{}),{rr:a.admin?.rr||{},mpWinner:a.admin?.mpWinner||{},mpVal:a.admin?.mpVal||{},undo:[]});
+  try{const cur=S._event;
+    if(cur)await write("archive/"+(cur.eid||"e0")+"-"+Date.now().toString(36),{event:clone(cur),admin:{rr:S._admin?.rr||{},mpWinner:S._admin?.mpWinner||{},mpVal:S._admin?.mpVal||{}},archivedAt:Date.now()});
+    const ad=Object.assign(clone(S._admin||{}),{rr:a.admin?.rr||{},mpWinner:a.admin?.mpWinner||{},mpVal:a.admin?.mpVal||{},undo:[]});
     ad.log=[{at:Date.now(),ev:a.event.eid||"",t:`Made “${a.event.name}” (${a.event.date||"no date"}) the current event from Past events.${cur?` “${cur.name}” was saved to Past events first.`:""}`}].concat(ad.log||[]);
     await LIF.importDocs({"event/main":a.event,"admin/state":ad},{});
-    S.past=null;S.pastConfirm=null;toast("Done. Everyone now sees this event.");}
+    leavePast();toast("Done. Everyone now sees this event.");}
   catch(x){toast(x.network?"You're offline. Switching events needs a connection.":"Couldn't switch: "+x.message);}
   S.pastBusy=false;schedule();}
 
@@ -1496,9 +1525,9 @@ render();
       setTimeout(retry,1500);document.addEventListener("visibilitychange",()=>{if(!S.me.id&&!document.hidden){tries=0;retry();}});}}
   const timer=setTimeout(()=>{S.stale=true;S.loaded=true;schedule();},10000);
   const err=e=>{console.warn(e);schedule();};
-  db.doc("event/main").onSnapshot(s=>{S.event=s.exists?s.data():null;S.loaded=true;
+  db.doc("event/main").onSnapshot(s=>{S._event=s.exists?s.data():null;S.loaded=true;
     if(!s.metadata.fromCache)ensureCode();if(!s.metadata.fromCache){clearTimeout(timer);S.stale=false;}schedule();},e=>{clearTimeout(timer);S.loaded=true;err(e)});
-  db.doc("admin/state").onSnapshot(s=>{S.admin=s.exists?s.data():{};schedule();},err);
+  db.doc("admin/state").onSnapshot(s=>{S._admin=s.exists?s.data():{};schedule();},err);
   db.doc("private/hitters").onSnapshot(s=>{S.priv=s.exists?s.data():(S.me.isOwner?{emails:{}}:null);S.privLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
   db.doc("private/library").onSnapshot(s=>{setTimeout(ensureCode,0);S.lib=s.exists?s.data():(S.me.isOwner?{hitters:{}}:null);S.libLoaded=!s.metadata.fromCache||s.exists;schedule();},()=>{});
   for(const col of ["joins","rr","commits","reveals"])db.collection(col).onSnapshot(q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S[col]=o;schedule();},err);
