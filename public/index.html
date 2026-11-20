@@ -1515,7 +1515,7 @@ function eventsSection(){const live=S._event,list=pastEvents();
     return el("div",{class:"evrow"},dateBlock(ev),
       el("div",{class:"evmain"},
         el("div",{class:"evtitle"},el("span",{class:"chip stat "+stc,text:st}),el("strong",{text:ev.name||"Event"})),
-        el("div",{class:"muted small",text:[evTime(ev,{local:true}).includes("your time")?evTime(ev,{local:true}):null,ev.venue,`${n} hitter${n===1?"":"s"}`,isLive?phaseName(ev.phase):null,!isLive&&a.editedAt?"edited "+tstr(a.editedAt):null].filter(Boolean).join(" · ")}),
+        el("div",{class:"muted small",text:[evTime(ev,{local:true})!==evTime(ev)?evTime(ev,{local:true}):null,ev.venue,`${n} hitter${n===1?"":"s"}`,isLive?phaseName(ev.phase):null,!isLive&&a.editedAt?"edited "+tstr(a.editedAt):null].filter(Boolean).join(" · ")}),
         el("div",{class:"row evact"},
           isLive?el("button",{class:"primary",onclick:()=>{S.dtab=ev.phase==="setup"?"settings":"flow";schedule();window.scrollTo(0,0);}},"Manage"):null,
           el("button",{class:isLive?"":"primary",onclick:()=>{if(isLive)goView("tracker");else{S.past=id;S.pastEdit=true;S.ttab=ev.seeding?"mp":"rr";schedule();window.scrollTo(0,0);}}},isLive?"Scores":"Edit scores"),
@@ -1560,7 +1560,7 @@ function evModal(){const M=S.evModal;if(!M)return null;const close=()=>{S.evModa
       !isNew&&M.id?el("p",{class:"muted small",style:"margin:0"},"Past event. Changes save to this event only and are logged."):null,
       el("div",{class:"grid"},f("name","Event name"),f("date","Date","date"),f("time","Start time","time"),
         el("label",{class:"f"},"Time zone",tzSelect("em_tz",D.tz,e=>{D.tz=e.target.value;schedule();})),f("venue","Location")),
-      D.time&&D.tz?el("p",{class:"muted small",style:"margin:0"},"Shows as ",el("strong",{text:evTime({date:D.date,time:D.time,tz:D.tz},{local:true,tz:myTZ})}),". Hitters see their own facility's time too."):null,
+      D.time&&D.tz?el("p",{class:"muted small",style:"margin:0"},"Shows as ",el("strong",{text:evTime({date:D.date,time:D.time,tz:D.tz},{local:true,tz:myTZ})}),". Hitters elsewhere also see it in their facility's time zone."):null,
       D.time&&D.tz?facilityTimesNote({date:D.date,time:D.time,tz:D.tz,siteTZ:(M.id?src.siteTZ:S._event?.siteTZ)||{},hitters:isNew?[]:(src.hitters||[])}):null,
       isNew&&S._event?el("div",{class:"note warn small"},`“${S._event.name}” moves to Past events, and everyone except you is signed out. They sign back in for the new event. The format and divisions carry over; the roster starts empty.`):null,
       el("div",{class:"row",style:"justify-content:flex-end"},el("button",{class:"ghost",onclick:close},"Cancel"),
@@ -1606,7 +1606,7 @@ function evTime(ev,o={}){if(!ev||!ev.time)return"";const t=timeText(ev.time);if(
   let out=t+" "+tzAbbr(ev.tz,ms);
   const vz=o.local?(o.tz||viewerTZ()):"";
   if(vz&&vz!==ev.tz&&tzOffset(vz,ms)!==tzOffset(ev.tz,ms)){const lt=new Date(ms);const sameDay=lt.toLocaleDateString("en-CA",{timeZone:vz})===ev.date;
-    out+=` (${lt.toLocaleTimeString([], {timeZone:vz,hour:"numeric",minute:"2-digit"})}${sameDay?"":" "+lt.toLocaleDateString([], {timeZone:vz,weekday:"short"})} your time)`;}
+    out+=` (${lt.toLocaleTimeString([], {timeZone:vz,hour:"numeric",minute:"2-digit"})}${sameDay?"":" "+lt.toLocaleDateString([], {timeZone:vz,weekday:"short"})} ${tzAbbr(vz,ms)})`;}
   return out;}
 
 // Copies each facility's time zone into the live event, so hitters' phones
